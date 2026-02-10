@@ -1,7 +1,5 @@
 # iRacingAnalyser
 
-A desktop tool that converts iRacing IBT telemetry files into CSV format and visualises telemetry data.
-
 ## Features
 - Session analysis (Practice | Qualifying | Race)
 - Telemetry visualisation (graphs)
@@ -11,6 +9,7 @@ A desktop tool that converts iRacing IBT telemetry files into CSV format and vis
 ## Tech Stack
 - Python
 - PySide6
+- PyQt5
 - pandas
 - pyirsdk
 - matplotlib
