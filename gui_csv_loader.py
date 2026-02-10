@@ -3,6 +3,7 @@ import pandas as pd
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
+    QSizePolicy,
     QVBoxLayout,
     QLabel,
     QPushButton,
@@ -23,13 +24,18 @@ class TelemetryWindow(QWidget):
         self.session_info = session_info
         self.telemetry_df = telemetry_df
 
+        # Window title and size
         self.setWindowTitle("iRacing Telemetry Viewer")
-        self.showFullScreen()  # make full screen
+        self.setGeometry(100, 100, 1280, 720)  # start windowed
+        self.setStyleSheet("background-color: #D3D3D3;")  # light grey background
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)  # remove default margins
         self.setLayout(layout)
 
-        # Header: Driver | Vehicle | Venue
+        # ----------------------
+        # Top banner ribbon
+        # ----------------------
         driver = session_info.get("Driver", "Unknown Driver")
         vehicle = session_info.get("Vehicle", "Unknown Vehicle")
         venue = session_info.get("Venue", "Unknown Venue")
@@ -37,15 +43,29 @@ class TelemetryWindow(QWidget):
 
         self.header_label = QLabel(header_text)
         self.header_label.setAlignment(Qt.AlignCenter)
-        self.header_label.setStyleSheet("font-size: 24px; font-weight: bold; padding: 20px;")
+        self.header_label.setStyleSheet("""
+            background-color: #003366;  /* dark blue */
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            padding: 10px;
+        """)
+        # Make banner only as tall as it needs to be
+        self.header_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(self.header_label)
 
-        # Placeholder for later graphs
+        # ----------------------
+        # Main content area
+        # ----------------------
         self.info_label = QLabel("Telemetry loaded! Graphs will appear here...")
         self.info_label.setAlignment(Qt.AlignCenter)
-        self.info_label.setStyleSheet("font-size: 18px; padding: 20px;")
+        self.info_label.setStyleSheet("""
+            font-size: 18px;
+            padding: 20px;
+        """)
+        # Expand to fill remaining space
+        self.info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.info_label)
-
 
 # ----------------------
 # Initial CSV loader window
