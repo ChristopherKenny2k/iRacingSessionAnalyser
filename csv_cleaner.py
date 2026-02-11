@@ -3,30 +3,40 @@ import pandas as pd
 def clean_csv(csv_path):
     session_info = {}
 
-    # Read top 8 lines manually
-    with open(csv_path, "r") as f:
-        for i in range(8):
-            line = f.readline().strip()
-            parts = line.split(",")
-            if len(parts) >= 2:
-                key = parts[0].strip()
-                value = ",".join(parts[1:]).strip()
-                session_info[key] = value
+    # Read session metadata for user,car,track (first 8 lines)
+    with open(csv_path, "r", encoding="utf-8") as f:
+        lines = [next(f).strip() for _ in range(8)]
 
-    # Read telemetry data starting at line 9
-    telemetry_df = pd.read_csv(csv_path, header=8, low_memory=False)
+    for line in lines:
+        parts = line.split(",", 1)
+        if len(parts) == 2:
+            key, value = parts
+            session_info[key.strip()] = value.strip()
 
-    # Convert numeric columns safely
+    # Read telemetry data
+    telemetry_df = pd.read_csv(
+        csv_path,
+        header=8,          # real header line
+        low_memory=False   # prevents dtype fragmentation
+    )
+
+    # Clean column names
+    telemetry_df.columns = [c.strip() for c in telemetry_df.columns]
+    # DROP FIRST ROW (fixes nan Error)
+    telemetry_df = telemetry_df.iloc[1:].reset_index(drop=True)
+
+    # Convert Type
     for col in telemetry_df.columns:
-        telemetry_df[col] = pd.to_numeric(telemetry_df[col], errors='coerce')
+        # Try numeric conversion
+        converted = pd.to_numeric(telemetry_df[col], errors="coerce")
 
-    cleaned_info = {
-        "Driver": session_info.get("Driver", "Unknown"),
-        "Vehicle": session_info.get("Vehicle", "Unknown"),
-        "Venue": session_info.get("Venue", "Unknown"),
-        "Session": session_info.get("Session", ""),
-        "Session Date": session_info.get("Session Date", ""),
-        "Session Time": session_info.get("Session Time", ""),
-    }
+        # If conversion didn't destroy most values, keep it
+        non_nan_ratio = converted.notna().mean()
 
-    return cleaned_info, telemetry_df
+        if non_nan_ratio > 0.7:   # 70% numeric = real numeric column
+            telemetry_df[col] = converted
+        else:
+            # else, keep as string
+            telemetry_df[col] = telemetry_df[col].astype(str)
+
+    return session_info, telemetry_df
