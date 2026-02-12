@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QVBoxLayout,
     QHBoxLayout,
+    QGridLayout,
     QLabel,
     QTableWidget,
     QTableWidgetItem,
@@ -29,10 +30,11 @@ from csv_cleaner import clean_csv  # csv cleaner
 # Full-screen window after CSV load
 # ----------------------
 class TelemetryWindow(QWidget):
-    def __init__(self, session_info, telemetry_df):
+    def __init__(self, session_info, telemetry_df, session_type):
         super().__init__()
         self.session_info = session_info
         self.telemetry_df = telemetry_df
+        self.session_type = session_type
 
         palette = QPalette()
         palette.setColor(QPalette.ToolTipBase, QColor("white"))
@@ -103,7 +105,7 @@ class TelemetryWindow(QWidget):
         self.stack.setStyleSheet("background-color: #eeeeee;")
 
         # ===== PAGES =====
-        self.page_overview = self.make_page("Overview")
+        self.page_overview = self.make_overview_page()
         self.page_timings  = self.make_page("Timings")
         self.page_tyres    = self.make_page("Tyres")
         self.page_pedals   = self.make_page("Pedals")
@@ -140,12 +142,12 @@ class TelemetryWindow(QWidget):
                 }
                 QPushButton:hover {
                 background-color: rgba(30, 41, 59, 120);
-                order-radius: 6px;
+                border-radius: 6px;
                 }
             """)
             btn.clicked.connect(lambda _, i=index: self.stack.setCurrentIndex(i))
             left_layout.addWidget(btn)
-
+            ####BOZO - Add loading bar (thanks cameron)
         # ===== ADD TO BODY =====
         body_layout.addWidget(left_panel)
         body_layout.addWidget(self.stack)
@@ -178,7 +180,121 @@ class TelemetryWindow(QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.resizeColumnsToContents()
 
-  # -----------------------
+
+    
+    # -----------------------
+    # Overview Page
+    # -----------------------
+    def make_overview_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(40, 30, 40, 30)
+        layout.setSpacing(20)
+
+        # ===== Title =====
+        session_type = self.session_type if hasattr(self, "session_type") else "Practice"
+        title = QLabel(f"{session_type} Session Overview")
+        title.setStyleSheet("""
+            font-size: 26px;
+            font-weight: bold;
+            color: #1f2937;
+        """)
+        layout.addWidget(title, alignment=Qt.AlignLeft)
+
+        df = self.telemetry_df.copy()
+
+        df_valid = df[
+            (df["Lap"] > 0) &
+            (df["LapLastLapTime"] > 0) &
+            (~df["LapLastLapTime"].isna())
+        ].copy()
+
+        # ===== Calculations =====
+
+        # Laps Completed (second highest Lap, cause partial final past finish tracked)
+        laps = sorted(df_valid["Lap"].dropna().unique())
+        laps_completed = int(laps[-1]) if len(laps) >= 1 else 0
+
+        # Get the fastest lap 
+        fastest_lap_seconds = df_valid["LapLastLapTime"].min()
+
+        minutes = int(fastest_lap_seconds // 60)
+        seconds = int(fastest_lap_seconds % 60)
+        millis = int((fastest_lap_seconds - int(fastest_lap_seconds)) * 1000)
+        fastest_lap_formatted = f"{minutes:02}:{seconds:02}.{millis:03}"
+
+        # gotta get the lap of fastest lap 
+        fastest_lap_row = df_valid.loc[df_valid["LapLastLapTime"].idxmin()]
+        fastest_lap_on = int(fastest_lap_row["Lap"])
+
+        #DEBUG TO GET VERIFY FASTEST SELECTED DELETE THIS BOZO
+        unique_times = sorted(df_valid["LapLastLapTime"].dropna().unique())
+        print("\n--- UNIQUE VALID LAP TIMES (seconds) ---")
+        for t in unique_times[:20]:  
+            print(t)
+
+        print("\nFastest 10 laps:")
+        for t in unique_times[:10]:
+            mins = int(t // 60)
+            secs = int(t % 60)
+            ms = int((t - int(t)) * 1000)
+        print(f"{mins:02}:{secs:02}.{ms:03}")
+        # ===== Temporary Overview DataFrame =====
+        overview_df = pd.DataFrame({
+            "Metric": [
+                "Laps Completed",
+                "Fastest Lap",
+                "Fastest Lap Set On"
+            ],
+            "Value": [
+                laps_completed,
+                fastest_lap_formatted,
+                fastest_lap_on
+            ]
+        })
+
+        # ===== Table Widget =====
+        table = QTableWidget()
+        table.setRowCount(len(overview_df))
+        table.setColumnCount(len(overview_df.columns))
+        table.setHorizontalHeaderLabels(overview_df.columns.tolist())
+
+        table.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                color: #111827;
+                gridline-color: #e5e7eb;
+                font-size: 14px;
+            }
+            QHeaderView::section {
+                background-color: #0b2a4a;
+                color: white;
+                font-weight: bold;
+                border: none;
+                padding: 6px;
+            }
+        """)
+
+        for row in range(len(overview_df)):
+            for col in range(len(overview_df.columns)):
+                item = QTableWidgetItem(str(overview_df.iat[row, col]))
+                if col == 0:
+                    item.setFlags(Qt.ItemIsEnabled)  # non-editable
+                table.setItem(row, col, item)
+
+        table.resizeColumnsToContents()
+        table.setFixedWidth(500)
+        table.setFixedHeight(200)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.setSelectionMode(QTableWidget.NoSelection)
+
+        layout.addWidget(table, alignment=Qt.AlignLeft)
+        layout.addStretch()
+
+        return page
+
+
+    # -----------------------
     # Make a page for the stacked widget
     # -----------------------
     def make_page(self, title):
@@ -228,6 +344,8 @@ class TelemetryWindow(QWidget):
             layout.addWidget(self.table)  # Add table to this page
 
         return page
+    
+    
 
 # ----------------------
 # Initial CSV loader window
@@ -326,19 +444,39 @@ class CSVLoader(QWidget):
         msg.setIcon(QMessageBox.Information)
         msg.setStandardButtons(QMessageBox.NoButton)
         msg.show()
-    
+        session_type = (
+        "Practice" if self.practice_cb.isChecked() else
+        "Qualifying" if self.qualifying_cb.isChecked() else
+        "Race"
+        )
         # force update to ensure popup appears
         QApplication.processEvents()
         # Clean CSV
         session_info, telemetry_df = clean_csv(self.csv_path)
+        telemetry_df["LapTimeline"] = (
+            telemetry_df["Lap"].astype(float) +
+            telemetry_df["LapDistPct"].astype(float) / 100.0
+        )
+        
+        #Round to 3 decimals
+        telemetry_df["LapTimeline"] = telemetry_df["LapTimeline"].round(3)
+        #Removing dupes
+        telemetry_df = telemetry_df.drop_duplicates(
+            subset=["LapTimeline"],
+            keep="first"
+        ).reset_index(drop=True)
+
+        # Add Ordering Row Lap + LapDist-ct /100 [LapTimeline]
+        telemetry_df = telemetry_df.sort_values("LapTimeline").reset_index(drop=True)
 
         # close window
         msg.close()
 
         self.close()  # close CSV loader
-        self.telemetry_window = TelemetryWindow(session_info, telemetry_df)
+        self.telemetry_window = TelemetryWindow(session_info, telemetry_df, session_type)
         self.telemetry_window.setWindowFlags(Qt.Window)
         self.telemetry_window.showMaximized()
+        self.session_type = session_type
 
 
 # ----------------------
