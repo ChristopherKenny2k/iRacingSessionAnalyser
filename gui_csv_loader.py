@@ -20,7 +20,10 @@ from PySide6.QtWidgets import (
     QFrame,
     QAbstractScrollArea,
     QLayout,
+    QComboBox,
     QHeaderView,
+    QListWidget,
+    QListWidgetItem,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
@@ -30,7 +33,7 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QFont
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QPalette
-from csv_cleaner import clean_csv  # csv cleaner
+from csv_cleaner import clean_csv
 
 # ----------------------
 # Full-screen window after CSV load
@@ -132,7 +135,7 @@ class TelemetryWindow(QWidget):
         self.page_overview = self.make_overview_page()
         self.page_timings  = self.make_page("Timings")
         self.page_tyres    = self.make_page("Tyres")
-        self.page_pedals   = self.make_page("Pedals")
+        self.page_pedals   = self.make_pedals_page()
         self.page_fuel     = self.make_page("Fuel")
         self.page_data     = self.make_page("Data Viewer")
 
@@ -172,7 +175,7 @@ class TelemetryWindow(QWidget):
             btn.clicked.connect(lambda _, i=index: self.stack.setCurrentIndex(i))
             left_layout.addWidget(btn)
             ####TODO: - Add loading bar (thanks cameron)
-        # ===== ADD TO BODY =====
+        
         body_layout.addWidget(left_panel)
         body_layout.addWidget(self.stack)
 
@@ -183,7 +186,7 @@ class TelemetryWindow(QWidget):
     # CSV Preview Loader
     # ===============================
     def load_table_preview(self):
-        self.preview_rows = 200   # safe limit for UI
+        self.preview_rows = 200  
         df = self.telemetry_df.iloc[:self.preview_rows]
 
         self.table.setRowCount(len(df))
@@ -204,7 +207,108 @@ class TelemetryWindow(QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.resizeColumnsToContents()
 
+    #==========
+    # PLOT TRACK MAP
+    #==========
+    def make_track_map_widget(self, venue):
+        """Create a track map visualization from GPS data"""
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+        from matplotlib.figure import Figure
+        import numpy as np
 
+        # for overview screen track "map" i plot the co-ord-s of the first clean* lap in the data set, if not clean lap is present, fastest lap is used
+        # Clean Lap* = a clean lap is one where the car is recorded as being "on-track" for the entire lap, to ensure an accurate depiction of the map
+        selected_lap_data = None
+
+        # Get valid laps (Lap > 0) done because lap 0 in PRACTICE/QUALIFYING session starts in pits, and in RACE sessions is the small distance at start before crossing the line, either from a standing start or rolling start
+        valid_laps = self.telemetry_df[self.telemetry_df["Lap"] > 0]["Lap"].unique()
+
+        # Rretrieving the first clean* lap that i mentioned above
+        for lap_num in sorted(valid_laps):
+            lap_data = self.telemetry_df[
+                (self.telemetry_df["Lap"] == lap_num)
+            ].copy()
+    
+            # here is the check for the car on track for entirety of lap
+            if (lap_data["IsOnTrackCar"] == 1).all():
+                selected_lap_data = lap_data
+                break
+
+        # fallback = i go to the fastest lap in the dataset
+        if selected_lap_data is None:
+            fastest_lap_num = int(self.telemetry_df.loc[
+                self.telemetry_df["LapLastLapTime"].idxmin()
+            ]["Lap"])
+            selected_lap_data = self.telemetry_df[
+            self.telemetry_df["Lap"] == fastest_lap_num
+        ].copy()
+        
+        # sorting by LapDistPct
+        selected_lap_data = selected_lap_data.sort_values("LapDistPct")
+
+        # Using matplot lib to plot the coordinates
+        fig = Figure(figsize=(10, 8), facecolor='#bfbec1')
+        ax = fig.add_subplot(111)
+
+        # Plot the track TODO: potentially add some UI which allows user to alter the colours for preference
+        ax.plot(selected_lap_data["Lon"], selected_lap_data["Lat"], 
+            color='#2563eb', linewidth=3.5)
+
+        # Here i add a red line perpendicular to the direction of the first two coordinates on the lap, while this could be achieved to a more accurate degree by taking the last point of the previous lap, doing it like this is adequate as the ibt file enters a row of data for every tick in the session, so even when downscaled, this is still accurate enough to be used on my map
+        # first point of lap
+        start_lon = selected_lap_data["Lon"].iloc[0]
+        start_lat = selected_lap_data["Lat"].iloc[0]
+
+        # second pont of the lap
+        second_lon = selected_lap_data["Lon"].iloc[1]
+        second_lat = selected_lap_data["Lat"].iloc[1]
+
+        # calculating the direction of the line between these 2 points
+        dx = second_lon - start_lon
+        dy = second_lat - start_lat
+
+        # Calculating the perpendicular line
+        perp_dx = -dy
+        perp_dy = dx
+
+        # Scaling for this perpendicular line 
+        length = np.sqrt(perp_dx**2 + perp_dy**2)
+        if length > 0:
+            perp_dx = perp_dx / length * 0.0003
+            perp_dy = perp_dy / length * 0.0003
+
+        # Plotting it
+        ax.plot([start_lon - perp_dx, start_lon + perp_dx],
+                [start_lat - perp_dy, start_lat + perp_dy],
+                color='red', linewidth=2.5, zorder=10)
+    
+        # Extra function for capitalising the title of the track, and ensuring that if 'gp' is present it is written as 'GP' to realistically reflect the title of a track's Grand Prix layout
+        def capitalize_venue(venue_name):
+            words = venue_name.split()
+            capitalized_words = []
+            for word in words:
+                if word.lower() == "gp":
+                    capitalized_words.append("GP")
+                else:
+                    capitalized_words.append(word.capitalize())
+            return " ".join(capitalized_words)
+
+        track_title = f"{capitalize_venue(venue)} - Track Map"
+        ax.set_aspect('equal')
+        ax.set_title(track_title, fontsize=14, fontweight='bold', pad=10)
+        ax.grid(True, alpha=0.2, linestyle='--')
+        ax.set_facecolor('white')
+    
+        # remove axis labels
+        ax.set_xticks([])
+        ax.set_yticks([])
+    
+        # tight layout, to cut down on whitespace
+        fig.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02)
+    
+        # Creating a widget to house the plot
+        canvas = FigureCanvas(fig)
+        return canvas
     
     # -----------------------
     # Overview Page
@@ -215,6 +319,9 @@ class TelemetryWindow(QWidget):
         layout.setContentsMargins(2, 2, 2, 5)
         layout.setSpacing(5)
 
+        # Get venue from session_info
+        venue = self.session_info.get("Venue", "Unknown Venue")
+
         # -=Title=-
         session_type = self.session_type if hasattr(self, "session_type") else "Practice"
         title = QLabel(f"{session_type} Session Overview")
@@ -224,7 +331,7 @@ class TelemetryWindow(QWidget):
             color: #000007;
         """)
         title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        layout.addWidget(title)  # title at the top
+        layout.addWidget(title)
 
         # Get Environmental Data from csv
         # taking from first non-null value (subject to change this as not very resilient)
@@ -238,7 +345,7 @@ class TelemetryWindow(QWidget):
         air_temp_str = f"{air_temp:.1f}°C"
         track_temp_str = f"{track_temp:.1f}°C"
         humidity_str = f"{relative_humidity:.0f}%"
-        pressure_str = f"{air_pressure / 3386.39:.2f} inHg"
+        pressure_str = f"{air_pressure / 3386.39:.2f} Hg"
         density_str = f"{air_density:.3f} kg/m³"
 
         # Get weather condition using index and applying the icons
@@ -288,13 +395,18 @@ class TelemetryWindow(QWidget):
         if not weather_pixmap.isNull():
             # Ensure border is visible, had some clipping issues
             weather_icon.setPixmap(weather_pixmap.scaled(55, 55, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        weather_icon.setFixedSize(60, 60) #keep slightly larger so border is visible
+        weather_icon.setFixedSize(60, 60)
         weather_icon.setAlignment(Qt.AlignCenter)
     
-        # Weather text
+         # Weather text
         weather_value = QLabel(weather_text)
         weather_value.setStyleSheet("font-size: 24px; color: #111827; font-weight: bold;")
-    
+
+        #REFERENCE OF MEASUREMENTS (dont forget to remove after completion TODO)
+        # Air & Track Temps in C*
+        # Humidity in %
+        # Air Pressure in Hg
+        # Air Density in kg/m^3
         weather_content_layout.addWidget(weather_icon)
         weather_content_layout.addWidget(weather_value)
     
@@ -323,7 +435,7 @@ class TelemetryWindow(QWidget):
     
         track_temp_label = QLabel("Track Temperature")
         track_temp_label.setStyleSheet("font-size: 16px; color: #6b7280; font-weight: 500;")
-        track_temp_value = QLabel(air_temp_str)
+        track_temp_value = QLabel(track_temp_str)
         track_temp_value.setStyleSheet("font-size: 24px; color: #111827; font-weight: bold;")
     
         track_temp_layout.addWidget(track_temp_label)
@@ -383,6 +495,10 @@ class TelemetryWindow(QWidget):
         layout.addWidget(env_bar)
         layout.addSpacing(10)
 
+        # -=Horizontal layout for table and track map=-
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(20)  # Space between table and map
+
         # -=Table Data=-
         # TODO: need to remove the headers
         df_valid = self.telemetry_df[
@@ -405,7 +521,7 @@ class TelemetryWindow(QWidget):
 
         # -=Table Widget=-
         table = QTableWidget(len(overview_df), len(overview_df.columns))
-        table.setHorizontalHeaderLabels(overview_df.columns.tolist())
+        table.horizontalHeader().setVisible(False)
         table.verticalHeader().setVisible(False)
         table.setFrameShape(QFrame.NoFrame)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -425,25 +541,29 @@ class TelemetryWindow(QWidget):
         h_header.setSectionResizeMode(1, QHeaderView.Stretch)
 
         # Set fixed table size to show all rows
-        table.setFixedHeight(137) 
-        table.setFixedWidth(400)  
+        table.setFixedHeight(150) 
+        table.setFixedWidth(500)  
 
-        
         table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        # no scrolling necesary on this one
+        # no scrolling necesary on this one as its way smaller than the preview screen table
         table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         table.setStyleSheet("""
             QTableWidget {
-                background-color: white;
+                background-color: #bfbec1;
                 color: #111827;
                 gridline-color: #27272b;
-                font-size: 20px;
+                font-size: 24px;
+                border-top: 1px solid #27272b;
+            }
+            QTableWidget::item {
+                background-color: white;
+                padding: 10px;
             }
             QHeaderView::section {
-                background-color: #d4d3e6;
+                background-color: #bfbec1;
                 color: black;
                 font-weight: bold;
                 font-size: 20px;
@@ -452,9 +572,20 @@ class TelemetryWindow(QWidget):
             }
         """)
 
-        # Add table directly under the horiz bar
-        layout.addWidget(table, alignment=Qt.AlignTop | Qt.AlignLeft)
+        # -=Track Map=-
+        track_map = self.make_track_map_widget(venue)
+        #Map Size
+        track_map.setFixedSize(650, 500) 
+        table.setContentsMargins(0, 0, 0, 0)
+        table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
+        # Add table and track map to horizontal layout
+        content_layout.addWidget(table, alignment=Qt.AlignTop | Qt.AlignLeft)
+        content_layout.addWidget(track_map, alignment=Qt.AlignTop | Qt.AlignLeft)
+        content_layout.addStretch()  
+
+        
+        layout.addLayout(content_layout)
 
         layout.addStretch()
 
@@ -510,11 +641,291 @@ class TelemetryWindow(QWidget):
             self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 
             layout.addWidget(self.table, alignment=Qt.AlignTop | Qt.AlignLeft)
-            layout.addStretch()  # Add table to this page
+            layout.addStretch() 
 
         return page
     
+    #================
+    # Pedal Data Page
+    #================
+    def make_pedals_page(self):
+        from PySide6.QtWidgets import QComboBox, QListWidget
+
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        # Title
+        title = QLabel("Pedal Usage Data")
+        title.setStyleSheet("""
+            font-size: 38px;
+            font-weight: bold;
+            color: #000007;
+        """)
+        title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        layout.addWidget(title)
+
+        # Main content layout - TODO layout lap selector on left map beside on right
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(20)
+
+        # === LEFT SIDE: Lap Selector ===
+        lap_selector_container = QWidget()
+        lap_selector_container.setFixedWidth(250)
+        lap_selector_layout = QVBoxLayout(lap_selector_container)
+        lap_selector_layout.setContentsMargins(0, 0, 0, 0)
+        lap_selector_layout.setSpacing(5)
+
+        # Dropdown for 'order by' section 
+        order_layout = QHBoxLayout()
+        order_label = QLabel("Order by:")
+        order_label.setStyleSheet("font-size: 22px; color: black; font-weight: bold;")
+
+        self.lap_order_selector = QComboBox()
+        self.lap_order_selector.addItem("Chronological", "chronological")
+        self.lap_order_selector.addItem("Fastest to Slowest", "fastest")
+        self.lap_order_selector.addItem("Slowest to Fastest", "slowest")
+        self.lap_order_selector.setStyleSheet("""
+            QComboBox {
+                font-size: 16px;
+                color: black;
+                padding: 5px;
+            }
+        """)
+        self.lap_order_selector.currentIndexChanged.connect(self.update_lap_list)
+
+        order_layout.addWidget(order_label)
+        order_layout.addWidget(self.lap_order_selector)
+        lap_selector_layout.addLayout(order_layout)
+
+        # Lap list
+        self.lap_list = QListWidget()
+        self.lap_list.setStyleSheet("""
+            QListWidget {
+                background-color: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 4px;
+                font-size: 18px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid #f3f4f6;
+                color: #000000;
+            }
+            QListWidget::item:selected {
+                background-color: #2563eb;
+                color: white;
+            }
+            QListWidget::item:hover {
+                background-color: #eff6ff;
+                color: #000000;  /* Add this line */
+            }
+        """)
+        self.lap_list.itemClicked.connect(self.update_pedal_track_map_from_list)
     
+        lap_selector_layout.addWidget(self.lap_list)
+
+        # Track Map TODO: put on right of lap selection
+        self.pedal_map_container = QWidget()
+        self.pedal_map_layout = QVBoxLayout(self.pedal_map_container)
+        self.pedal_map_layout.setContentsMargins(0, 0, 0, 0)
+    
+        content_layout.addWidget(lap_selector_container)
+        content_layout.addWidget(self.pedal_map_container)
+        content_layout.addStretch()
+        
+        layout.addLayout(content_layout)
+        layout.addStretch()
+
+        
+        self.lap_data_dict = {}
+    
+        # Get valid laps and their times, last is removed as it typically represents the cooldown lap in a RACE or an incomplete/re-entry to pits in PRACTICE/QUALIFYING sessions
+        valid_laps = sorted(self.telemetry_df[self.telemetry_df["Lap"] > 0]["Lap"].unique())
+        if len(valid_laps) > 1:
+            valid_laps = valid_laps[:-1]
+    
+        # Building the  lap data dictionary
+        for lap in valid_laps:
+            lap_times = self.telemetry_df[
+                (self.telemetry_df["Lap"] == lap + 1) &
+                (self.telemetry_df["LapLastLapTime"] > 0)
+            ]["LapLastLapTime"]
+    
+            if len(lap_times) > 0:
+                lap_time = lap_times.iloc[0]
+                minutes = int(lap_time // 60)
+                seconds = int(lap_time % 60)
+                millis = int((lap_time - int(lap_time)) * 1000)
+                lap_time_str = f"{minutes:02}:{seconds:02}.{millis:03}"
+                self.lap_data_dict[int(lap)] = {
+                    'time': lap_time,
+                    'time_str': lap_time_str
+                }
+            else:
+                self.lap_data_dict[int(lap)] = {
+                    'time': float('inf'),
+                    'time_str': 'N/A'
+                }
+    
+        
+        self.update_lap_list()
+
+        #default layout is chronological before user selects their odrer by preference
+        if self.lap_list.count() > 0:
+            self.lap_list.setCurrentRow(0)
+            self.update_pedal_track_map_from_list()
+    
+        return page
+
+    def update_lap_list(self):
+        """Update the lap list based on selected ordering"""
+        from PySide6.QtWidgets import QListWidgetItem
+    
+        self.lap_list.clear()
+    
+        order_mode = self.lap_order_selector.currentData()
+    
+        # Sort laps based on order mode
+        if order_mode == "chronological":
+            sorted_laps = sorted(self.lap_data_dict.keys())
+        elif order_mode == "fastest":
+            sorted_laps = sorted(self.lap_data_dict.keys(), 
+                           key=lambda x: self.lap_data_dict[x]['time'])
+        else:  # slowest
+            sorted_laps = sorted(self.lap_data_dict.keys(), 
+                           key=lambda x: self.lap_data_dict[x]['time'], 
+                           reverse=True)
+    
+        # Populate list
+        for lap in sorted_laps:
+            lap_info = self.lap_data_dict[lap]
+            item_text = f"Lap {lap} - {lap_info['time_str']}"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.UserRole, lap) 
+            self.lap_list.addItem(item)
+
+    def update_pedal_track_map_from_list(self):
+        """Wrapper to get lap from list item"""
+        current_item = self.lap_list.currentItem()
+        if current_item:
+            selected_lap = current_item.data(Qt.UserRole)
+            self.update_pedal_track_map(selected_lap)
+
+    def update_pedal_track_map(self, selected_lap):
+        """Update the pedal track map when lap selection changes"""
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+        from matplotlib.figure import Figure
+        import numpy as np
+        from matplotlib.collections import LineCollection
+    
+        # Clear existing map
+        while self.pedal_map_layout.count():
+            child = self.pedal_map_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+    
+        if selected_lap is None:
+            return
+    
+        # Get venue
+        venue = self.session_info.get("Venue", "Unknown Venue")
+    
+        # Get lap data
+        lap_data = self.telemetry_df[
+            (self.telemetry_df["Lap"] == selected_lap) &
+            (self.telemetry_df["IsOnTrackCar"] == 1)
+        ].copy()
+
+        if len(lap_data) == 0:
+            error_label = QLabel("No data available for this lap")
+            error_label.setAlignment(Qt.AlignCenter)
+            self.pedal_map_layout.addWidget(error_label)
+            return
+    
+        lap_data = lap_data.sort_values("LapDistPct").reset_index(drop=True)
+        lap_time_str = self.lap_data_dict.get(selected_lap, {}).get('time_str', 'N/A')
+    
+        fig = Figure(figsize=(10, 8), facecolor='#bfbec1')
+        ax = fig.add_subplot(111)
+    
+        # Prepare data for colored line segments
+        points = np.array([lap_data["Lon"].values, lap_data["Lat"].values]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
+    
+        # Determine color based on throttle vs brake
+        # GREEN = THROTTLE, RED = BRAKE, TODO: determine what should be considered "coasting"
+        throttle = lap_data["Throttle"].values
+        brake = lap_data["Brake"].values
+    
+        colors = []
+        for i in range(len(throttle) - 1):
+            if throttle[i] > brake[i]:
+                colors.append('green')
+            else:
+                colors.append('red')
+    
+        
+        lc = LineCollection(segments, colors=colors, linewidths=3.5)
+        ax.add_collection(lc)
+    
+        # Add start/finish line again TODO: red is not valid colour as it conflicts red being used to represent braking
+        start_lon = lap_data["Lon"].iloc[0]
+        start_lat = lap_data["Lat"].iloc[0]
+        second_lon = lap_data["Lon"].iloc[1]
+        second_lat = lap_data["Lat"].iloc[1]
+    
+        dx = second_lon - start_lon
+        dy = second_lat - start_lat
+        perp_dx = -dy
+        perp_dy = dx
+    
+        length = np.sqrt(perp_dx**2 + perp_dy**2)
+        if length > 0:
+            perp_dx = perp_dx / length * 0.0003
+            perp_dy = perp_dy / length * 0.0003
+    
+        ax.plot([start_lon - perp_dx, start_lon + perp_dx],
+                [start_lat - perp_dy, start_lat + perp_dy],
+                color='white', linewidth=2.5, zorder=10)
+    
+        def capitalize_venue(venue_name):
+            words = venue_name.split()
+            capitalized_words = []
+            for word in words:
+                if word.lower() == "gp":
+                    capitalized_words.append("GP")
+                else:
+                    capitalized_words.append(word.capitalize())
+            return " ".join(capitalized_words)
+    
+        track_title = f"Lap {selected_lap} - Throttle/Brake Usage"
+        ax.set_aspect('equal')
+        ax.set_title(track_title, fontsize=14, fontweight='bold', pad=10, loc='left')
+    
+        # Lap time placed in top right of track map, TODO: increase padding so lap time does not overlap track
+        ax.text(0.98, 0.98, f"Lap Time: {lap_time_str}", 
+                transform=ax.transAxes,
+                fontsize=12,
+                verticalalignment='top',
+                horizontalalignment='right',
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+        ax.set_facecolor('white')
+        ax.set_xticks([])
+        ax.set_yticks([])
+    
+        ax.set_xlim(lap_data["Lon"].min() - 0.0005, lap_data["Lon"].max() + 0.0005)
+        ax.set_ylim(lap_data["Lat"].min() - 0.0005, lap_data["Lat"].max() + 0.0005)
+    
+        fig.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02)
+    
+        canvas = FigureCanvas(fig)
+        # BRAKING MAP SIZE
+        canvas.setFixedSize(800, 650)
+        self.pedal_map_layout.addWidget(canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
+        
 
 # ----------------------
 # Initial CSV loader window
@@ -606,7 +1017,7 @@ class CSVLoader(QWidget):
             self.continue_button.setVisible(False)
 
     def on_continue(self):
-         # show popup first - "wait" message
+         # show popup first - "wait" message TODO: loading bar
         msg = QMessageBox()
         msg.setWindowTitle("Please Wait")
         msg.setText("Reading Data: This may take a few seconds")
