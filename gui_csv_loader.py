@@ -807,19 +807,104 @@ class TelemetryWindow(QWidget):
         self.lap_list.itemClicked.connect(self.update_pedal_track_map_from_list)
         lap_selector_layout.addWidget(self.lap_list)
 
-        # === RIGHT SIDE widget: atm track map (coloured on throttle) + pedal playbackgraph ===
+        # === RIGHT SIDE widget ===
         right_container = QWidget()
         right_layout = QVBoxLayout(right_container)
         right_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
 
-        # Track map container
+        # Container for track map AND speed display
+        self.map_speed_container = QWidget()
+        map_speed_layout = QHBoxLayout(self.map_speed_container)
+        map_speed_layout.setContentsMargins(0, 0, 0, 0)
+        map_speed_layout.setSpacing(10)
+        map_speed_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        
+        # Track map container (left side)
         self.pedal_map_container = QWidget()
         self.pedal_map_layout = QVBoxLayout(self.pedal_map_container)
-        self.pedal_map_layout.setAlignment(Qt.AlignLeft)
+        self.pedal_map_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.pedal_map_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.addWidget(self.pedal_map_container)
+        
+        # Speed display box
+        speed_container = QWidget()
+        speed_container_layout = QVBoxLayout(speed_container)
+        speed_container_layout.setAlignment(Qt.AlignBottom | Qt.AlignRight)
+        speed_container_layout.setContentsMargins(0, 0, 0, 0)
+        speed_container_layout.addStretch()  
+        
+        self.speed_display_widget = QWidget()
+        self.speed_display_widget.setFixedHeight(100)
+        self.speed_display_widget.setFixedWidth(200)
+        self.speed_display_widget.setStyleSheet("""
+            QWidget {
+                background-color: #f8f9fa;
+                border-radius: 8px;
+                border: 1px solid #e5e7eb;
+            }
+        """)
+        speed_display_layout = QVBoxLayout(self.speed_display_widget)
+        speed_display_layout.setContentsMargins(10, 8, 10, 8)
+        speed_display_layout.setSpacing(3)
+
+        speed_label = QLabel("Speed")
+        speed_label.setStyleSheet("font-size: 11px; color: #6b7280; font-weight: 500;")
+        speed_display_layout.addWidget(speed_label)
+
+        self.speed_value_label = QLabel("0")
+        self.speed_value_label.setStyleSheet("font-size: 36px; color: #111827; font-weight: bold;")
+        speed_display_layout.addWidget(self.speed_value_label)
+
+        unit_row = QHBoxLayout()
+        unit_row.setSpacing(5)
+
+        self.speed_unit_kmh = QPushButton("km/h")
+        self.speed_unit_mph = QPushButton("mph")
+        self.speed_unit_kmh.setCheckable(True)
+        self.speed_unit_mph.setCheckable(True)
+        self.speed_unit_kmh.setChecked(True)
+        self.speed_unit_kmh.setFixedSize(55, 25)
+        self.speed_unit_mph.setFixedSize(55, 25)
+
+        toggle_style = """
+            QPushButton {
+                background-color: #e5e7eb;
+                color: #6b7280;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: bold;
+            }
+            QPushButton:checked {
+                background-color: #2563eb;
+                color: white;
+                border: 1px solid #2563eb;
+            }
+            QPushButton:hover {
+                background-color: #d1d5db;
+            }
+            QPushButton:checked:hover {
+                background-color: #1d4ed8;
+            }
+        """
+        self.speed_unit_kmh.setStyleSheet(toggle_style)
+        self.speed_unit_mph.setStyleSheet(toggle_style)
+
+        self.speed_unit_kmh.clicked.connect(lambda: self.toggle_speed_unit("kmh"))
+        self.speed_unit_mph.clicked.connect(lambda: self.toggle_speed_unit("mph"))
+
+        unit_row.addWidget(self.speed_unit_kmh)
+        unit_row.addWidget(self.speed_unit_mph)
+
+        speed_display_layout.addLayout(unit_row)
+        speed_container_layout.addWidget(self.speed_display_widget)
+        
+        
+        map_speed_layout.addWidget(self.pedal_map_container)
+        map_speed_layout.addWidget(speed_container)
+        
+        right_layout.addWidget(self.map_speed_container)
 
         # Playback controls
         controls_widget = QWidget()
@@ -862,7 +947,6 @@ class TelemetryWindow(QWidget):
         """)
         self.reset_btn.clicked.connect(self.reset_playback)
 
-        # Speed multiplier
         speed_label = QLabel("Speed:")
         speed_label.setStyleSheet("font-size: 14px; font-weight: bold; color: black;")
 
@@ -880,7 +964,6 @@ class TelemetryWindow(QWidget):
             }
         """)
 
-        # Playback time label
         self.playback_time_label = QLabel("0.000s / 0.000s")
         self.playback_time_label.setStyleSheet("font-size: 14px; color: black; font-weight: bold;")
 
@@ -899,6 +982,12 @@ class TelemetryWindow(QWidget):
         self.pedal_graph_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.addWidget(self.pedal_graph_container)
 
+        # Gear graph container
+        self.gear_graph_container = QWidget()
+        self.gear_graph_layout = QVBoxLayout(self.gear_graph_container)
+        self.gear_graph_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.addWidget(self.gear_graph_container)
+
         # Add both sides to content layout
         content_layout.addWidget(lap_selector_container)
         content_layout.addWidget(right_container)
@@ -907,7 +996,7 @@ class TelemetryWindow(QWidget):
         layout.addLayout(content_layout)
         layout.addStretch()
 
-        # Playback state TODO: noticed bug not resetting to 1x speed after switching to 8x speed and switching back to lower multiplier quickly after that
+        # Playback state
         self.playback_index = 0
         self.playback_active = False
         self.playback_timer = QTimer()
@@ -950,6 +1039,15 @@ class TelemetryWindow(QWidget):
             self.update_pedal_track_map_from_list()
 
         return page
+
+    def toggle_speed_unit(self, unit):
+        """Toggle between km/h and mph"""
+        if unit == "kmh":
+            self.speed_unit_kmh.setChecked(True)
+            self.speed_unit_mph.setChecked(False)
+        else:
+            self.speed_unit_kmh.setChecked(False)
+            self.speed_unit_mph.setChecked(True)
 
     def update_lap_list(self):
         self.lap_list.clear()
@@ -1000,6 +1098,12 @@ class TelemetryWindow(QWidget):
             child = self.pedal_graph_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
+        
+        # Clear gear graph
+        while self.gear_graph_layout.count():
+            child = self.gear_graph_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
 
         if selected_lap is None:
             return
@@ -1027,13 +1131,11 @@ class TelemetryWindow(QWidget):
         lap_time_str = self.lap_data_dict.get(selected_lap, {}).get('time_str', 'N/A')
         row_count = len(lap_data)
 
-        # Calculation to match realtime playback as closely as possible to 1s in data = 1s in realtime playback
         if lap_time_val > 0 and lap_time_val != float('inf') and row_count > 0:
-            self.playback_interval = (lap_time_val / row_count) * 1000  # ms per row
+            self.playback_interval = (lap_time_val / row_count) * 1000
         else:
             self.playback_interval = 100
 
-        # Update time label
         self.playback_time_label.setText(f"0.000s / {lap_time_val:.3f}s")
 
         # ===== STATIC TRACK MAP =====
@@ -1059,7 +1161,6 @@ class TelemetryWindow(QWidget):
         lc = LineCollection(segments, colors=colors, linewidths=3.5)
         ax_map.add_collection(lc)
 
-        # Start/finish line NOTE: cant be green here due to colour being used for throttle
         start_lon = lap_data["Lon"].iloc[0]
         start_lat = lap_data["Lat"].iloc[0]
         second_lon = lap_data["Lon"].iloc[1]
@@ -1077,7 +1178,6 @@ class TelemetryWindow(QWidget):
                     [start_lat - perp_dy, start_lat + perp_dy],
                     color='black', linewidth=2.5, zorder=10)
 
-        # Driver dot (default pos at start of lap)
         self.driver_dot, = ax_map.plot(
             lap_data["Lon"].iloc[0],
             lap_data["Lat"].iloc[0],
@@ -1116,44 +1216,32 @@ class TelemetryWindow(QWidget):
         self.pedal_ax.set_facecolor('#1a1a2e')
         self.pedal_ax.set_xlim(0, 5) 
         self.pedal_ax.set_ylim(-5, 105)
-        self.pedal_ax.set_ylabel("Input %", fontsize=10, color='white')
-        self.pedal_ax.tick_params(colors='white')
-        self.pedal_ax.set_xlabel("Time (s)", fontsize=10, color='white')
+        self.pedal_ax.set_ylabel("Input %", fontsize=10, color='black')
+        self.pedal_ax.tick_params(colors='black')
+        self.pedal_ax.set_xlabel("Time (s)", fontsize=10, color='black')
         for spine in self.pedal_ax.spines.values():
             spine.set_edgecolor('#444444')
 
-        # dashed lines for reference at 25,50 and 70 perc %
         for y_val in [25, 50, 75]:
             self.pedal_ax.axhline(
-                y=y_val,
-                color='#adadad',
-                linewidth=1,
-                linestyle='--',
-                alpha=0.3,
-                zorder=1
+                y=y_val, color='#adadad', linewidth=1,
+                linestyle='--', alpha=0.3, zorder=1
             )
             
-        # Legend
         from matplotlib.patches import Patch
         legend_elements = [
             Patch(facecolor='#079902', label='Throttle'),
             Patch(facecolor='#ff0318', label='Brake'),
         ]
         self.pedal_ax.legend(
-            handles=legend_elements,
-            loc='upper left',
-            bbox_to_anchor=(0, -.20),  
-            ncol=2,                      
-            facecolor='#bfbec1',
-            labelcolor='black',
-            fontsize=9,
-            framealpha=1,
-            edgecolor='#444444'
+            handles=legend_elements, loc='upper left',
+            bbox_to_anchor=(0, -.20), ncol=2,                      
+            facecolor='#bfbec1', labelcolor='black',
+            fontsize=9, framealpha=1, edgecolor='#444444'
         )
 
-        # Initialize empty lines
-        self.throttle_line, = self.pedal_ax.plot([], [], color='#04ff00', linewidth=1, label='Throttle')
-        self.brake_line, = self.pedal_ax.plot([], [], color='#ff0000', linewidth=1, label='Brake')
+        self.throttle_line, = self.pedal_ax.plot([], [], color='#04ff00', linewidth=1)
+        self.brake_line, = self.pedal_ax.plot([], [], color='#ff0000', linewidth=1)
 
         fig_pedal.subplots_adjust(left=0.08, right=0.98, top=0.90, bottom=0.25)
 
@@ -1161,31 +1249,65 @@ class TelemetryWindow(QWidget):
         self.pedal_canvas.setFixedSize(800, 250)
         self.pedal_graph_layout.addWidget(self.pedal_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
 
-        # Playback time tracking
         self.playback_time_data = []
         self.playback_throttle_data = []
         self.playback_brake_data = []
         self.current_time = 0.0
         self.time_per_row = self.playback_interval / 1000.0
 
+        # ===== GEAR GRAPH =====
+        min_gear = int(lap_data["Gear"].min())
+        max_gear = int(lap_data["Gear"].max())
+        y_min = -1.5 if min_gear < 0 else -0.5
+        y_max = max_gear + 0.5
+
+        fig_gear = Figure(figsize=(10, 2.5), facecolor='#bfbec1')
+        self.gear_ax = fig_gear.add_subplot(111)
+        self.gear_ax.set_facecolor('#1a1a2e')
+        self.gear_ax.set_xlim(0, 5)
+        self.gear_ax.set_ylim(y_min, y_max)
+        self.gear_ax.set_ylabel("Gear", fontsize=12, color='black')
+        self.gear_ax.tick_params(colors='black')
+        self.gear_ax.set_xlabel("Time (s)", fontsize=10, color='black')
+        for spine in self.gear_ax.spines.values():
+            spine.set_edgecolor('#444444')
+
+        gear_ticks = list(range(min_gear if min_gear < 0 else 0, max_gear + 1))
+        gear_labels = ['R' if g == -1 else 'N' if g == 0 else str(g) for g in gear_ticks]
+        self.gear_ax.set_yticks(gear_ticks)
+        self.gear_ax.set_yticklabels(gear_labels, color='black', fontsize=9)
+
+        for g in gear_ticks:
+            self.gear_ax.axhline(
+                y=g, color='#adadad', linewidth=1,
+                linestyle='--', alpha=0.3, zorder=1
+            )
+
+        self.gear_line, = self.gear_ax.plot([], [], color='#05f7ef', linewidth=1)
+
+        fig_gear.subplots_adjust(left=0.08, right=0.98, top=0.90, bottom=0.15)
+
+        self.gear_canvas = FigureCanvas(fig_gear)
+        self.gear_canvas.setFixedSize(800, 180)
+        self.gear_graph_layout.addWidget(self.gear_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
+
+        self.playback_gear_data = []
+
     def toggle_playback(self):
         if self.current_lap_data is None:
             return
 
         if self.playback_active:
-            # Pause
             self.playback_timer.stop()
             self.playback_active = False
             self.play_pause_btn.setText("▶ Play")
         else:
-            # Play - reset if at end
             if self.playback_index >= len(self.current_lap_data) - 1:
                 self.reset_playback()
 
             self.playback_active = True
             self.play_pause_btn.setText("⏸ Pause")
 
-            # Apply speed multiplier
             speed = self.speed_selector.currentData()
             interval = max(1, int(self.playback_interval / speed))
             self.playback_timer.start(interval)
@@ -1199,13 +1321,12 @@ class TelemetryWindow(QWidget):
         self.playback_time_data = []
         self.playback_throttle_data = []
         self.playback_brake_data = []
+        self.playback_gear_data = []
+
+        # Reset speed display
+        self.speed_value_label.setText("0")
 
         if self.current_lap_data is not None:
-            lap_time_val = 0
-            for info in self.lap_data_dict.values():
-                pass  
-
-            # Reset dot to start
             if hasattr(self, 'driver_dot') and hasattr(self, 'map_canvas'):
                 self.driver_dot.set_data(
                     [self.current_lap_data["Lon"].iloc[0]],
@@ -1213,12 +1334,16 @@ class TelemetryWindow(QWidget):
                 )
                 self.map_canvas.draw()
 
-            # Reset pedal graph
             if hasattr(self, 'throttle_line'):
                 self.throttle_line.set_data([], [])
                 self.brake_line.set_data([], [])
                 self.pedal_ax.set_xlim(0, 5)
                 self.pedal_canvas.draw()
+            
+            if hasattr(self, 'gear_line'):
+                self.gear_line.set_data([], [])
+                self.gear_ax.set_xlim(0, 5)
+                self.gear_canvas.draw()
 
             self.playback_time_label.setText(f"0.000s / {self.time_per_row * len(self.current_lap_data):.3f}s")
 
@@ -1228,7 +1353,6 @@ class TelemetryWindow(QWidget):
 
         speed = self.speed_selector.currentData()
 
-        # Advance multiple steps if speed > 1x
         for _ in range(speed):
             if self.playback_index >= len(self.current_lap_data) - 1:
                 self.playback_timer.stop()
@@ -1239,25 +1363,31 @@ class TelemetryWindow(QWidget):
             row = self.current_lap_data.iloc[self.playback_index]
             self.current_time += self.time_per_row
 
-            
             self.playback_time_data.append(self.current_time)
             self.playback_throttle_data.append(float(row["Throttle"]))
             self.playback_brake_data.append(float(row["Brake"]))
+            self.playback_gear_data.append(float(row["Gear"]))
 
             self.playback_index += 1
 
-        # Update driver dot on map
         current_row = self.current_lap_data.iloc[self.playback_index]
         self.driver_dot.set_data([current_row["Lon"]], [current_row["Lat"]])
         self.map_canvas.draw()
 
-        # Update pedal graph with rolling 5 second window
+        # Update speed display
+        current_speed_ms = float(current_row["Speed"])
+        if self.speed_unit_kmh.isChecked():
+            speed_display = current_speed_ms * 3.6
+            self.speed_value_label.setText(f"{speed_display:.0f}")
+        else:
+            speed_display = current_speed_ms * 2.23694
+            self.speed_value_label.setText(f"{speed_display:.0f}")
+
         window_seconds = 5.0
         times = self.playback_time_data
         throttles = self.playback_throttle_data
         brakes = self.playback_brake_data
 
-        # Find start of window
         window_start = self.current_time - window_seconds
         start_idx = 0
         for i, t in enumerate(times):
@@ -1272,7 +1402,6 @@ class TelemetryWindow(QWidget):
         self.throttle_line.set_data(windowed_times, windowed_throttle)
         self.brake_line.set_data(windowed_times, windowed_brake)
 
-        # Scroll the x axis
         if self.current_time > window_seconds:
             self.pedal_ax.set_xlim(self.current_time - window_seconds, self.current_time)
         else:
@@ -1280,7 +1409,16 @@ class TelemetryWindow(QWidget):
 
         self.pedal_canvas.draw()
 
-        # Update time label
+        windowed_gear = self.playback_gear_data[start_idx:]
+        self.gear_line.set_data(windowed_times, windowed_gear)
+
+        if self.current_time > window_seconds:
+            self.gear_ax.set_xlim(self.current_time - window_seconds, self.current_time)
+        else:
+            self.gear_ax.set_xlim(0, window_seconds)
+
+        self.gear_canvas.draw()
+
         total_time = self.time_per_row * len(self.current_lap_data)
         self.playback_time_label.setText(f"{self.current_time:.3f}s / {total_time:.3f}s")
         
