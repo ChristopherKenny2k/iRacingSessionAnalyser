@@ -820,23 +820,90 @@ class TelemetryWindow(QWidget):
         map_speed_layout.setContentsMargins(0, 0, 0, 0)
         map_speed_layout.setSpacing(10)
         map_speed_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        
-        # Track map container (left side)
+
+        # Left side: map container with toggle
+        map_with_toggle = QWidget()
+        map_with_toggle_layout = QVBoxLayout(map_with_toggle)
+        map_with_toggle_layout.setContentsMargins(0, 0, 0, 0)
+        map_with_toggle_layout.setSpacing(5)
+
+        # Toggle for map coloring mode
+        toggle_container = QWidget()
+        toggle_container.setFixedHeight(40)
+        toggle_layout = QHBoxLayout(toggle_container)
+        toggle_layout.setContentsMargins(0, 0, 0, 0)
+        toggle_layout.setSpacing(10)
+        toggle_layout.addStretch()  
+
+        toggle_label = QLabel("Map View:")
+        toggle_label.setStyleSheet("font-size: 12px; color: black; font-weight: bold;")
+        toggle_layout.addWidget(toggle_label)
+
+        self.map_mode_throttle = QPushButton("Throttle/Brake")
+        self.map_mode_gear = QPushButton("Gear")
+        self.map_mode_throttle.setCheckable(True)
+        self.map_mode_gear.setCheckable(True)
+        self.map_mode_throttle.setChecked(True)
+        self.map_mode_throttle.setFixedSize(110, 30)
+        self.map_mode_gear.setFixedSize(70, 30)
+
+        map_toggle_style = """
+            QPushButton {
+                background-color: #e5e7eb;
+                color: #6b7280;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:checked {
+                background-color: #2563eb;
+                color: white;
+                border: 1px solid #2563eb;
+            }
+            QPushButton:hover {
+                background-color: #d1d5db;
+            }
+            QPushButton:checked:hover {
+                background-color: #1d4ed8;
+            }
+        """
+        self.map_mode_throttle.setStyleSheet(map_toggle_style)
+        self.map_mode_gear.setStyleSheet(map_toggle_style)
+
+        self.map_mode_throttle.clicked.connect(lambda: self.toggle_map_mode("throttle"))
+        self.map_mode_gear.clicked.connect(lambda: self.toggle_map_mode("gear"))
+
+        toggle_layout.addWidget(self.map_mode_throttle)
+        toggle_layout.addWidget(self.map_mode_gear)
+
+        map_with_toggle_layout.addWidget(toggle_container)
+
+        # Track map container (below toggle)
         self.pedal_map_container = QWidget()
         self.pedal_map_layout = QVBoxLayout(self.pedal_map_container)
         self.pedal_map_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.pedal_map_layout.setContentsMargins(0, 0, 0, 0)
-        
+
+        map_with_toggle_layout.addWidget(self.pedal_map_container)
+
+        # Right side: legend + speed display stacked vertically
+        right_side_container = QWidget()
+        right_side_layout = QVBoxLayout(right_side_container)
+        right_side_layout.setContentsMargins(0, 40, 0, 0)  # Top margin to align with map (below toggle)
+        right_side_layout.setSpacing(10)
+        right_side_layout.setAlignment(Qt.AlignTop)
+
+        # This will hold the legend (added dynamically in update_pedal_track_map)
+        self.legend_placeholder = QWidget()
+        self.legend_placeholder_layout = QVBoxLayout(self.legend_placeholder)
+        self.legend_placeholder_layout.setContentsMargins(0, 0, 0, 0)
+        right_side_layout.addWidget(self.legend_placeholder)
+
         # Speed display box
-        speed_container = QWidget()
-        speed_container_layout = QVBoxLayout(speed_container)
-        speed_container_layout.setAlignment(Qt.AlignBottom | Qt.AlignRight)
-        speed_container_layout.setContentsMargins(0, 0, 0, 0)
-        speed_container_layout.addStretch()  
-        
         self.speed_display_widget = QWidget()
         self.speed_display_widget.setFixedHeight(100)
-        self.speed_display_widget.setFixedWidth(200)
+        self.speed_display_widget.setFixedWidth(150)
         self.speed_display_widget.setStyleSheet("""
             QWidget {
                 background-color: #f8f9fa;
@@ -898,12 +965,14 @@ class TelemetryWindow(QWidget):
         unit_row.addWidget(self.speed_unit_mph)
 
         speed_display_layout.addLayout(unit_row)
-        speed_container_layout.addWidget(self.speed_display_widget)
-        
-        
-        map_speed_layout.addWidget(self.pedal_map_container)
-        map_speed_layout.addWidget(speed_container)
-        
+
+        right_side_layout.addWidget(self.speed_display_widget)
+        right_side_layout.addStretch()
+
+        # Add map and right side (legend + speed) to horizontal layout
+        map_speed_layout.addWidget(map_with_toggle)
+        map_speed_layout.addWidget(right_side_container)
+
         right_layout.addWidget(self.map_speed_container)
 
         # Playback controls
@@ -1049,6 +1118,21 @@ class TelemetryWindow(QWidget):
             self.speed_unit_kmh.setChecked(False)
             self.speed_unit_mph.setChecked(True)
 
+    def toggle_map_mode(self, mode):
+        """Toggle between throttle/brake and gear map view"""
+        if mode == "throttle":
+            self.map_mode_throttle.setChecked(True)
+            self.map_mode_gear.setChecked(False)
+        else:
+            self.map_mode_throttle.setChecked(False)
+            self.map_mode_gear.setChecked(True)
+        
+        # Redraw the map with new coloring
+        current_item = self.lap_list.currentItem()
+        if current_item:
+            selected_lap = current_item.data(Qt.UserRole)
+            self.update_pedal_track_map(selected_lap)
+
     def update_lap_list(self):
         self.lap_list.clear()
         order_mode = self.lap_order_selector.currentData()
@@ -1147,16 +1231,37 @@ class TelemetryWindow(QWidget):
 
         throttle = lap_data["Throttle"].values
         brake = lap_data["Brake"].values
+        gear = lap_data["Gear"].values
         COAST_THRESHOLD = 3
 
         colors = []
-        for i in range(len(throttle) - 1):
-            if throttle[i] < COAST_THRESHOLD and brake[i] < COAST_THRESHOLD:
-                colors.append('#ffcd03')
-            elif throttle[i] > brake[i]:
-                colors.append('#079902')
-            else:
-                colors.append('#ff0318')
+
+        # Check which mode is active
+        if self.map_mode_throttle.isChecked():
+            # Throttle/Brake coloring
+            for i in range(len(throttle) - 1):
+                if throttle[i] < COAST_THRESHOLD and brake[i] < COAST_THRESHOLD:
+                    colors.append('#ffcd03')  # Coasting - yellow
+                elif throttle[i] > brake[i]:
+                    colors.append('#079902')  # Throttle - green
+                else:
+                    colors.append('#ff0318')  # Brake - red
+        else:
+            # Gear coloring
+            gear_color_map = {
+                -1: '#002aff',
+                0: '#00aaff', 
+                1: '#00ff91', 
+                2: '#48a82a', 
+                3: '#d8f51d', 
+                4: '#faac0f',  
+                5: '#fa750f',  
+                6: '#fa0f0f',  
+                7: '#aa44ff',  
+                8: '#f308ff',  
+            }
+            for i in range(len(gear) - 1):
+                colors.append(gear_color_map.get(int(gear[i]), '#ffffff'))
 
         lc = LineCollection(segments, colors=colors, linewidths=3.5)
         ax_map.add_collection(lc)
@@ -1190,25 +1295,117 @@ class TelemetryWindow(QWidget):
                 for w in v.split()
             )
 
-        ax_map.set_title(f"Lap {selected_lap} - Throttle/Brake Usage",
-                        fontsize=14, fontweight='bold', pad=10, loc='left')
+        if self.map_mode_throttle.isChecked():
+            map_title = f"Lap {selected_lap} - Throttle/Brake Usage"
+        else:
+            map_title = f"Lap {selected_lap} - Gear Usage"
+
+        ax_map.set_title(map_title, fontsize=14, fontweight='bold', pad=10, loc='left')
         ax_map.text(0.98, 0.98, f"Lap Time: {lap_time_str}",
                     transform=ax_map.transAxes, fontsize=12,
                     verticalalignment='top', horizontalalignment='right',
                     bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
         ax_map.set_aspect('equal')
-        ax_map.set_facecolor('white')
+        ax_map.set_facecolor('#d6d6d6')
         ax_map.set_xticks([])
         ax_map.set_yticks([])
         ax_map.set_xlim(lap_data["Lon"].min() - 0.0005, lap_data["Lon"].max() + 0.0005)
         ax_map.set_ylim(lap_data["Lat"].min() - 0.0005, lap_data["Lat"].max() + 0.0005)
         fig_map.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02)
 
+
         self.map_canvas = ZoomableCanvas(fig_map)
         self.map_canvas.setFixedSize(800, 650)
         self.map_ax = ax_map
+
+        # ===== MAP LEGEND =====
+        legend_widget = QWidget()
+        legend_widget.setFixedWidth(150)
+        legend_widget.setStyleSheet("""
+            QWidget {
+                background-color: #f8f9fa;
+                border-radius: 8px;
+                border: 1px solid #e5e7eb;
+            }
+        """)
+        legend_layout = QVBoxLayout(legend_widget)
+        legend_layout.setContentsMargins(10, 10, 10, 10)
+        legend_layout.setSpacing(5)
+
+        legend_title = QLabel("Legend")
+        legend_title.setStyleSheet("font-size: 13px; color: #111827; font-weight: bold;")
+        legend_layout.addWidget(legend_title)
+
+        if self.map_mode_throttle.isChecked():
+            # Throttle/Brake legend
+            legend_items = [
+                ("#079902", "Throttle"),
+                ("#ff0318", "Brake"),
+                ("#ffcd03", "Coasting"),
+            ]
+        else:
+            # Gear legend
+            gear_color_map = {
+                -1: '#002aff',
+                0: '#00aaff', 
+                1: '#00ff91', 
+                2: '#48a82a', 
+                3: '#d8f51d', 
+                4: '#faac0f',  
+                5: '#fa750f',  
+                6: '#fa0f0f',  
+                7: '#aa44ff',  
+                8: '#f308ff',  
+            }
+            min_gear = int(lap_data["Gear"].min())
+            max_gear = int(lap_data["Gear"].max())
+            gear_range = range(min_gear if min_gear < 0 else 0, max_gear + 1)
+            
+            legend_items = []
+            for g in gear_range:
+                gear_label = 'R' if g == -1 else 'N' if g == 0 else f"Gear {g}"
+                legend_items.append((gear_color_map.get(g, '#ffffff'), gear_label))
+
+        # Create legend items
+        for color, label in legend_items:
+            item_layout = QHBoxLayout()
+            item_layout.setSpacing(8)
+            
+            # Color box
+            color_box = QLabel()
+            color_box.setFixedSize(20, 20)
+            color_box.setStyleSheet(f"""
+                background-color: {color};
+                border: 1px solid #d1d5db;
+                border-radius: 3px;
+            """)
+            
+            # Label
+            text_label = QLabel(label)
+            text_label.setStyleSheet("font-size: 11px; color: #111827;")
+            
+            item_layout.addWidget(color_box)
+            item_layout.addWidget(text_label)
+            item_layout.addStretch()
+            
+            legend_layout.addLayout(item_layout)
+
+        legend_layout.addStretch()
+
+        # Clear legend placeholder
+        while self.legend_placeholder_layout.count():
+            child = self.legend_placeholder_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        # Add the legend widget to the placeholder
+        self.legend_placeholder_layout.addWidget(legend_widget, alignment=Qt.AlignTop)
+      
+
+        # Add the container to the pedal_map_layout
         self.pedal_map_layout.addWidget(self.map_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
+
 
         # ===== PEDAL GRAPH =====
         fig_pedal = Figure(figsize=(10, 3.5), facecolor='#bfbec1')
