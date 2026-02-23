@@ -685,6 +685,8 @@ class TelemetryWindow(QWidget):
     def make_page(self, title):
         page = QWidget()
         layout = QVBoxLayout(page)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
 
         label = QLabel(title)
         label.setAlignment(Qt.AlignCenter)
@@ -726,8 +728,7 @@ class TelemetryWindow(QWidget):
             self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
             self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 
-            layout.addWidget(self.table, alignment=Qt.AlignTop | Qt.AlignLeft)
-            layout.addStretch() 
+            layout.addWidget(self.table) 
 
         return page
     
@@ -857,7 +858,7 @@ class TelemetryWindow(QWidget):
         
         valid_laps = sorted(self.telemetry_df[self.telemetry_df["Lap"] > 0]["Lap"].unique())
         if len(valid_laps) > 1:
-            valid_laps = valid_laps[:-1]  
+            valid_laps = valid_laps[:-1]  # Exclude last lap (usually incomplete)
 
         for lap in valid_laps:
             lap_data = self.telemetry_df[
@@ -867,50 +868,56 @@ class TelemetryWindow(QWidget):
             if len(lap_data) == 0:
                 continue
 
-            # Get lap time from next lap's LapLastLapTime
-            lap_time_rows = self.telemetry_df[
+            # Try to get lap time from the NEXT lap's LapLastLapTime first (most reliable)
+            lap_time_rows_next = self.telemetry_df[
                 (self.telemetry_df["Lap"] == lap + 1) &
                 (self.telemetry_df["LapLastLapTime"] > 0)
             ]["LapLastLapTime"]
+            
+            # Fallback: try current lap's LapLastLapTime
+            lap_time_rows_current = self.telemetry_df[
+                (self.telemetry_df["Lap"] == lap) &
+                (self.telemetry_df["LapLastLapTime"] > 0)
+            ]["LapLastLapTime"]
 
-            if len(lap_time_rows) == 0:
+            # Use whichever we found
+            if len(lap_time_rows_next) > 0:
+                lap_time = lap_time_rows_next.iloc[0]
+            elif len(lap_time_rows_current) > 0:
+                lap_time = lap_time_rows_current.iloc[0]
+            else:
+                # Last resort: calculate from SessionTime
+                if len(lap_data) > 1:
+                    lap_time = lap_data["SessionTime"].iloc[-1] - lap_data["SessionTime"].iloc[0]
+                else:
+                    continue
+
+            if lap_time <= 0:
                 continue
 
-            lap_time = lap_time_rows.iloc[0]
-
-            # check if thr lap is valid
+            # Check if lap is valid (on track entire time)
             is_valid = (lap_data["IsOnTrackCar"] == 1).all()
 
-            # calculate sector times based on createdcolumn
+            # Calculate sector times based on LapDistPct
             lap_data_sorted = lap_data.sort_values("LapDistPct").reset_index(drop=True)
 
-            # get session times at sector boundaries TODO: DOES NOT CALCULATE ACCURATELY FIX THIS OR REMOVE
-            sector1_data = lap_data_sorted[lap_data_sorted["LapDistPct"] < 33.33]
-            sector2_data = lap_data_sorted[(lap_data_sorted["LapDistPct"] >= 33.33) & 
-                                        (lap_data_sorted["LapDistPct"] < 66.66)]
-            sector3_data = lap_data_sorted[lap_data_sorted["LapDistPct"] >= 66.66]
-
-            # calculate sector times by finding the time at each sector boundary *ROUGH WORK NEEDS FIXING*
+            # Find the closest data points to each sector boundary
             if len(lap_data_sorted) > 0:
                 lap_start_time = lap_data_sorted["SessionTime"].iloc[0]
+                lap_end_time = lap_data_sorted["SessionTime"].iloc[-1]
                 
-                # Find times at sector boundaries
-                if len(sector1_data) > 0:
-                    sector1_end_time = lap_data_sorted[lap_data_sorted["LapDistPct"] >= 33.33]["SessionTime"].iloc[0] if len(lap_data_sorted[lap_data_sorted["LapDistPct"] >= 33.33]) > 0 else lap_data_sorted["SessionTime"].iloc[-1]
-                else:
-                    sector1_end_time = lap_start_time
+                # Sector 1: 0% to 33.33%
+                sector1_end_idx = (lap_data_sorted["LapDistPct"] - 33.33).abs().idxmin()
+                sector1_end_time = lap_data_sorted.loc[sector1_end_idx, "SessionTime"]
                 
-                if len(sector2_data) > 0:
-                    sector2_end_time = lap_data_sorted[lap_data_sorted["LapDistPct"] >= 66.66]["SessionTime"].iloc[0] if len(lap_data_sorted[lap_data_sorted["LapDistPct"] >= 66.66]) > 0 else lap_data_sorted["SessionTime"].iloc[-1]
-                else:
-                    sector2_end_time = sector1_end_time
+                # Sector 2: 33.33% to 66.66%
+                sector2_end_idx = (lap_data_sorted["LapDistPct"] - 66.66).abs().idxmin()
+                sector2_end_time = lap_data_sorted.loc[sector2_end_idx, "SessionTime"]
                 
-                sector3_end_time = lap_data_sorted["SessionTime"].iloc[-1]
-                
-                # Calculate sector durations
+                # Calculate sector times
                 sector1_time = sector1_end_time - lap_start_time
                 sector2_time = sector2_end_time - sector1_end_time
-                sector3_time = sector3_end_time - sector2_end_time
+                sector3_time = lap_end_time - sector2_end_time
             else:
                 sector1_time = 0
                 sector2_time = 0
@@ -931,7 +938,7 @@ class TelemetryWindow(QWidget):
                 'is_valid': is_valid
             }
 
-        # get fastest
+        # Find best lap (OUTSIDE the loop)
         valid_lap_times = {lap: data['time'] for lap, data in self.lap_timings.items() 
                         if data['is_valid'] and data['time'] != float('inf')}
         
@@ -942,7 +949,7 @@ class TelemetryWindow(QWidget):
             self.best_lap = None
             self.best_lap_time = None
 
-        # DELTA calculation (delta to best / fastest lap)
+        # Calculate deltas to best lap (OUTSIDE the loop)
         if self.best_lap is not None:
             for lap in self.lap_timings:
                 delta = self.lap_timings[lap]['time'] - self.best_lap_time
@@ -1394,7 +1401,7 @@ class TelemetryWindow(QWidget):
 
         # Enable sorting after populating
         table.setSortingEnabled(True)
-        table.sortItems(0, Qt.AscendingOrder)  # Sort by lap number initially
+        table.sortItems(0, Qt.AscendingOrder)  
 
         table.itemSelectionChanged.connect(self.on_timing_table_selection_changed)
         return table
@@ -1406,12 +1413,12 @@ class TelemetryWindow(QWidget):
         if not selected_items:
             return
         
-        # Get the lap number from the first column of the selected row
+
         row = selected_items[0].row()
         lap_item = self.timing_table.item(row, 0)
         selected_lap = int(lap_item.text())
         
-        # Redraw the map for the selected lap
+        #redraw map after user selects a lap in lap selector
         self.draw_timing_map_for_lap(selected_lap)
     
     def toggle_timing_map_mode(self, mode):
@@ -1748,7 +1755,7 @@ class TelemetryWindow(QWidget):
         map_with_toggle_layout.setContentsMargins(0, 0, 0, 0)
         map_with_toggle_layout.setSpacing(5)
 
-        # Toggle for map selected mode (gear/throt-brake)
+        #Gear/Throttle toggle
         toggle_container = QWidget()
         toggle_container.setFixedHeight(40)
         toggle_layout = QHBoxLayout(toggle_container)
@@ -1811,11 +1818,11 @@ class TelemetryWindow(QWidget):
         # Right side: legend + speed display stacked vertically
         right_side_container = QWidget()
         right_side_layout = QVBoxLayout(right_side_container)
-        right_side_layout.setContentsMargins(0, 40, 0, 0)  # Top margin to align with map (below toggle)
+        right_side_layout.setContentsMargins(0, 40, 0, 0)  
         right_side_layout.setSpacing(10)
         right_side_layout.setAlignment(Qt.AlignTop)
 
-        # This will hold the legend (added dynamically in update_pedal_track_map)
+    
         self.legend_placeholder = QWidget()
         self.legend_placeholder_layout = QVBoxLayout(self.legend_placeholder)
         self.legend_placeholder_layout.setContentsMargins(0, 0, 0, 0)
@@ -1890,7 +1897,6 @@ class TelemetryWindow(QWidget):
         right_side_layout.addWidget(self.speed_display_widget)
         right_side_layout.addStretch()
 
-        # Add map and right side (legend + speed) to horizontal layout
         map_speed_layout.addWidget(map_with_toggle)
         map_speed_layout.addWidget(right_side_container)
 
@@ -2001,13 +2007,31 @@ class TelemetryWindow(QWidget):
             valid_laps = valid_laps[:-1]
 
         for lap in valid_laps:
-            lap_times = self.telemetry_df[
+           
+            lap_times_next = self.telemetry_df[
                 (self.telemetry_df["Lap"] == lap + 1) &
                 (self.telemetry_df["LapLastLapTime"] > 0)
             ]["LapLastLapTime"]
+            
+    
+            lap_times_current = self.telemetry_df[
+                (self.telemetry_df["Lap"] == lap) &
+                (self.telemetry_df["LapLastLapTime"] > 0)
+            ]["LapLastLapTime"]
 
-            if len(lap_times) > 0:
-                lap_time = lap_times.iloc[0]
+      
+            if len(lap_times_next) > 0:
+                lap_time = lap_times_next.iloc[0]
+            elif len(lap_times_current) > 0:
+                lap_time = lap_times_current.iloc[0]
+            else:
+                lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap]
+                if len(lap_data) > 1:
+                    lap_time = lap_data["SessionTime"].iloc[-1] - lap_data["SessionTime"].iloc[0]
+                else:
+                    lap_time = None
+
+            if lap_time and lap_time > 0:
                 minutes = int(lap_time // 60)
                 seconds = int(lap_time % 60)
                 millis = int((lap_time - int(lap_time)) * 1000)
@@ -2116,8 +2140,7 @@ class TelemetryWindow(QWidget):
         venue = self.session_info.get("Venue", "Unknown Venue")
 
         lap_data = self.telemetry_df[
-            (self.telemetry_df["Lap"] == selected_lap) &
-            (self.telemetry_df["IsOnTrackCar"] == 1)
+            (self.telemetry_df["Lap"] == selected_lap)
         ].copy()
 
         if len(lap_data) == 0:
@@ -2126,7 +2149,19 @@ class TelemetryWindow(QWidget):
             self.pedal_map_layout.addWidget(error_label)
             return
 
-        lap_data = lap_data.sort_values("LapDistPct").reset_index(drop=True)
+        lap_data = lap_data.sort_values("SessionTick").reset_index(drop=True)
+
+        # DEBUG: Check for gaps in SessionTick
+        print(f"\n=== Lap {selected_lap} Data Analysis ===")
+        print(f"Total rows: {len(lap_data)}")
+        print(f"SessionTick range: {lap_data['SessionTick'].min()} to {lap_data['SessionTick'].max()}")
+        tick_diff = lap_data["SessionTick"].diff()
+        large_gaps = tick_diff[tick_diff > 10]
+        if len(large_gaps) > 0:
+            print(f"Found {len(large_gaps)} large gaps in SessionTick:")
+            for idx, gap in large_gaps.items():
+                print(f"  Row {idx}: gap of {gap} ticks")
+        print(f"IsOnTrackCar values: {lap_data['IsOnTrackCar'].value_counts().to_dict()}")
 
         # Store for playback
         self.current_lap_data = lap_data
@@ -2162,11 +2197,14 @@ class TelemetryWindow(QWidget):
             # Throttle/Brake colouring
             for i in range(len(throttle) - 1):
                 if throttle[i] < COAST_THRESHOLD and brake[i] < COAST_THRESHOLD:
-                    colors.append('#ffcd03')  # Coasting - yellow
+                    # Coasting - yellow
+                    colors.append('#ffcd03')  
                 elif throttle[i] > brake[i]:
-                    colors.append('#079902')  # Throttle - green
+                     # Throttle - green
+                    colors.append('#079902') 
                 else:
-                    colors.append('#ff0318')  # Brake - red
+                    # Brake - red
+                    colors.append('#ff0318')  
         else:
             # Gear colouring
             gear_color_map = {
@@ -2371,7 +2409,6 @@ class TelemetryWindow(QWidget):
         self.playback_throttle_data = []
         self.playback_brake_data = []
         self.current_time = 0.0
-        self.time_per_row = self.playback_interval / 1000.0
 
         # ===== GEAR GRAPH =====
         min_gear = int(lap_data["Gear"].min())
@@ -2426,22 +2463,22 @@ class TelemetryWindow(QWidget):
             self.playback_active = True
             self.play_pause_btn.setText("⏸ Pause")
 
-            speed = self.speed_selector.currentData()
-            interval = max(1, int(self.playback_interval / speed))
-            self.playback_timer.start(interval)
-
+       
+            self.playback_timer.start(50)
+            
     def reset_playback(self):
         self.playback_timer.stop()
         self.playback_active = False
         self.play_pause_btn.setText("▶ Play")
         self.playback_index = 0
         self.current_time = 0.0
+        self.current_tick = 0 
         self.playback_time_data = []
         self.playback_throttle_data = []
         self.playback_brake_data = []
         self.playback_gear_data = []
+        self._last_plotted_index = 0
 
-        # Reset speed display
         self.speed_value_label.setText("0")
 
         if self.current_lap_data is not None:
@@ -2463,36 +2500,53 @@ class TelemetryWindow(QWidget):
                 self.gear_ax.set_xlim(0, 5)
                 self.gear_canvas.draw()
 
-            self.playback_time_label.setText(f"0.000s / {self.time_per_row * len(self.current_lap_data):.3f}s")
+
+            lap_start_tick = self.current_lap_data["SessionTick"].iloc[0]
+            lap_end_tick = self.current_lap_data["SessionTick"].iloc[-1]
+            total_time = (lap_end_tick - lap_start_tick) / 60  
+            self.playback_time_label.setText(f"0.000s / {total_time:.3f}s")
 
     def playback_step(self):
         if self.current_lap_data is None:
             return
 
         speed = self.speed_selector.currentData()
+        
+  
+        ticks_per_second = 60
+        tick_increment = int((0.05 * speed) * ticks_per_second)
+        
+        # Advance current tick
+        lap_start_tick = self.current_lap_data["SessionTick"].iloc[0]
+        lap_end_tick = self.current_lap_data["SessionTick"].iloc[-1]
+        total_lap_ticks = lap_end_tick - lap_start_tick
 
-        for _ in range(speed):
-            if self.playback_index >= len(self.current_lap_data) - 1:
-                self.playback_timer.stop()
-                self.playback_active = False
-                self.play_pause_btn.setText("▶ Play")
-                return
+        if not hasattr(self, 'current_tick'):
+            self.current_tick = 0
+        
+        self.current_tick += tick_increment
+        
 
-            row = self.current_lap_data.iloc[self.playback_index]
-            self.current_time += self.time_per_row
+        if self.current_tick >= total_lap_ticks:
+            self.playback_timer.stop()
+            self.playback_active = False
+            self.play_pause_btn.setText("▶ Play")
+            self.current_tick = total_lap_ticks
+            self.playback_index = len(self.current_lap_data) - 1
+            current_row = self.current_lap_data.iloc[self.playback_index]
+        else:
+          
+            target_tick = lap_start_tick + self.current_tick
+            
+       
+            tick_diffs = (self.current_lap_data["SessionTick"] - target_tick).abs()
+            self.playback_index = tick_diffs.idxmin()
+            current_row = self.current_lap_data.loc[self.playback_index]
 
-            self.playback_time_data.append(self.current_time)
-            self.playback_throttle_data.append(float(row["Throttle"]))
-            self.playback_brake_data.append(float(row["Brake"]))
-            self.playback_gear_data.append(float(row["Gear"]))
-
-            self.playback_index += 1
-
-        current_row = self.current_lap_data.iloc[self.playback_index]
+  
         self.driver_dot.set_data([current_row["Lon"]], [current_row["Lat"]])
         self.map_canvas.draw()
 
-        # Update speed display
         current_speed_ms = float(current_row["Speed"])
         if self.speed_unit_kmh.isChecked():
             speed_display = current_speed_ms * 3.6
@@ -2501,12 +2555,40 @@ class TelemetryWindow(QWidget):
             speed_display = current_speed_ms * 2.23694
             self.speed_value_label.setText(f"{speed_display:.0f}")
 
+        last_plotted_index = getattr(self, '_last_plotted_index', 0)
+
+    
+        if self.playback_index > last_plotted_index:
+   
+            for idx in range(last_plotted_index + 1, self.playback_index + 1):
+                if idx < len(self.current_lap_data):
+                    row = self.current_lap_data.iloc[idx]
+
+                    row_tick = row["SessionTick"] - lap_start_tick
+                    row_time = row_tick / ticks_per_second
+                    
+    
+                    if len(self.playback_time_data) == 0 or row_time > self.playback_time_data[-1]:
+                        self.playback_time_data.append(row_time)
+                        self.playback_throttle_data.append(float(row["Throttle"]))
+                        self.playback_brake_data.append(float(row["Brake"]))
+                        self.playback_gear_data.append(float(row["Gear"]))
+        elif self.playback_index == last_plotted_index:
+            pass
+
+     
+        self._last_plotted_index = self.playback_index
+
+  
         window_seconds = 5.0
         times = self.playback_time_data
         throttles = self.playback_throttle_data
         brakes = self.playback_brake_data
+        gears = self.playback_gear_data
 
-        window_start = self.current_time - window_seconds
+        current_time_seconds = self.current_tick / ticks_per_second
+
+        window_start = current_time_seconds - window_seconds
         start_idx = 0
         for i, t in enumerate(times):
             if t >= window_start:
@@ -2516,29 +2598,32 @@ class TelemetryWindow(QWidget):
         windowed_times = times[start_idx:]
         windowed_throttle = throttles[start_idx:]
         windowed_brake = brakes[start_idx:]
+        windowed_gear = gears[start_idx:]
 
+        # Update pedal graph
         self.throttle_line.set_data(windowed_times, windowed_throttle)
         self.brake_line.set_data(windowed_times, windowed_brake)
 
-        if self.current_time > window_seconds:
-            self.pedal_ax.set_xlim(self.current_time - window_seconds, self.current_time)
+        if current_time_seconds > window_seconds:
+            self.pedal_ax.set_xlim(current_time_seconds - window_seconds, current_time_seconds)
         else:
             self.pedal_ax.set_xlim(0, window_seconds)
 
         self.pedal_canvas.draw()
 
-        windowed_gear = self.playback_gear_data[start_idx:]
+        # Update gear graph
         self.gear_line.set_data(windowed_times, windowed_gear)
 
-        if self.current_time > window_seconds:
-            self.gear_ax.set_xlim(self.current_time - window_seconds, self.current_time)
+        if current_time_seconds > window_seconds:
+            self.gear_ax.set_xlim(current_time_seconds - window_seconds, current_time_seconds)
         else:
             self.gear_ax.set_xlim(0, window_seconds)
 
         self.gear_canvas.draw()
 
-        total_time = self.time_per_row * len(self.current_lap_data)
-        self.playback_time_label.setText(f"{self.current_time:.3f}s / {total_time:.3f}s")
+        # Update time label
+        total_lap_time = total_lap_ticks / ticks_per_second
+        self.playback_time_label.setText(f"{current_time_seconds:.3f}s / {total_lap_time:.3f}s")
         
 
 # ----------------------
@@ -2631,7 +2716,7 @@ class CSVLoader(QWidget):
             self.continue_button.setVisible(False)
 
     def on_continue(self):
-         # show popup first - "wait" message TODO: loading bar
+        # show popup first - "wait" message TODO: loading bar
         msg = QMessageBox()
         msg.setWindowTitle("Please Wait")
         msg.setText("Reading Data: This may take a few seconds")
@@ -2639,29 +2724,30 @@ class CSVLoader(QWidget):
         msg.setStandardButtons(QMessageBox.NoButton)
         msg.show()
         session_type = (
-        "Practice" if self.practice_cb.isChecked() else
-        "Qualifying" if self.qualifying_cb.isChecked() else
-        "Race"
+            "Practice" if self.practice_cb.isChecked() else
+            "Qualifying" if self.qualifying_cb.isChecked() else
+            "Race"
         )
         # force update to ensure popup appears
         QApplication.processEvents()
+        
         # Clean CSV
         session_info, telemetry_df = clean_csv(self.csv_path)
+        
+        # Remove duplicates based on SessionTick (preserves temporal data during spins)
+        telemetry_df = telemetry_df.drop_duplicates(
+            subset=["SessionTick"],
+            keep="first"
+        ).reset_index(drop=True)
+
+        # Sort by SessionTick for temporal order (DO NOT sort by LapTimeline)
+        telemetry_df = telemetry_df.sort_values("SessionTick").reset_index(drop=True)
+
+        # Create LapTimeline for compatibility (but don't sort by it)
         telemetry_df["LapTimeline"] = (
             telemetry_df["Lap"].astype(float) +
             telemetry_df["LapDistPct"].astype(float) / 100.0
         )
-        
-        
-        telemetry_df["LapTimeline"] = telemetry_df["LapTimeline"].round(3)
-        #Removing dupes
-        telemetry_df = telemetry_df.drop_duplicates(
-            subset=["LapTimeline"],
-            keep="first"
-        ).reset_index(drop=True)
-
-        # Add Ordering Row Lap + LapDist-ct /100 [LapTimeline]
-        telemetry_df = telemetry_df.sort_values("LapTimeline").reset_index(drop=True)
 
         # close window
         msg.close()
@@ -2682,3 +2768,7 @@ if __name__ == "__main__":
     window = CSVLoader()
     window.show()
     sys.exit(app.exec())
+
+
+#TODO: SORTING OF LAPS NOT WORKING PROPERLY
+
