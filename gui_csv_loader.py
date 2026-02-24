@@ -40,6 +40,8 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
+from scipy.ndimage import median_filter
+
 from csv_cleaner import clean_csv
 
 
@@ -857,10 +859,8 @@ class TelemetryWindow(QWidget):
         self.lap_timings = {}
         
         valid_laps = sorted(self.telemetry_df[self.telemetry_df["Lap"] > 0]["Lap"].unique())
-        if len(valid_laps) > 1:
-            valid_laps = valid_laps[:-1]  # Exclude last lap (usually incomplete)
 
-        for lap in valid_laps:
+        for lap in valid_laps:  
             lap_data = self.telemetry_df[
                 (self.telemetry_df["Lap"] == lap)
             ].copy()
@@ -868,40 +868,32 @@ class TelemetryWindow(QWidget):
             if len(lap_data) == 0:
                 continue
 
-            # Try to get lap time from the NEXT lap's LapLastLapTime first (most reliable)
-            lap_time_rows_next = self.telemetry_df[
+            # Get lap time from the NEXT lap's LapLastLapTime
+            # iRacing does not report lap time of last lap in session due to cooldown lap not being fully completed, 
+            # therefore I use session ticks (60 per second) to calculate the time (usually off by +- .006s)
+            lap_time_rows = self.telemetry_df[
                 (self.telemetry_df["Lap"] == lap + 1) &
                 (self.telemetry_df["LapLastLapTime"] > 0)
             ]["LapLastLapTime"]
-            
-            # Fallback: try current lap's LapLastLapTime
-            lap_time_rows_current = self.telemetry_df[
-                (self.telemetry_df["Lap"] == lap) &
-                (self.telemetry_df["LapLastLapTime"] > 0)
-            ]["LapLastLapTime"]
 
-            # Use whichever we found
-            if len(lap_time_rows_next) > 0:
-                lap_time = lap_time_rows_next.iloc[0]
-            elif len(lap_time_rows_current) > 0:
-                lap_time = lap_time_rows_current.iloc[0]
+            if len(lap_time_rows) > 0:
+                lap_time = lap_time_rows.iloc[-1]  # Use last value in case it updated mid-lap
             else:
-                # Last resort: calculate from SessionTime
+                # Next lap doesn't exist or has no LapLastLapTime - calculate from SessionTick
                 if len(lap_data) > 1:
-                    lap_time = lap_data["SessionTime"].iloc[-1] - lap_data["SessionTime"].iloc[0]
+                    lap_time = (lap_data["SessionTick"].iloc[-1] - lap_data["SessionTick"].iloc[0]) / 60
                 else:
                     continue
 
             if lap_time <= 0:
                 continue
-
+                
             # Check if lap is valid (on track entire time)
             is_valid = (lap_data["IsOnTrackCar"] == 1).all()
-
+            
             # Calculate sector times based on LapDistPct
             lap_data_sorted = lap_data.sort_values("LapDistPct").reset_index(drop=True)
-
-            # Find the closest data points to each sector boundary
+            
             if len(lap_data_sorted) > 0:
                 lap_start_time = lap_data_sorted["SessionTime"].iloc[0]
                 lap_end_time = lap_data_sorted["SessionTime"].iloc[-1]
@@ -937,6 +929,12 @@ class TelemetryWindow(QWidget):
                 'sector3': sector3_time,
                 'is_valid': is_valid
             }
+
+        # Remove the last lap (incomplete cooldown lap) BEFORE finding best lap
+        if len(self.lap_timings) > 0:
+            last_lap = max(self.lap_timings.keys())
+            if last_lap in self.lap_timings:
+                del self.lap_timings[last_lap]
 
         # Find best lap (OUTSIDE the loop)
         valid_lap_times = {lap: data['time'] for lap, data in self.lap_timings.items() 
@@ -1351,7 +1349,8 @@ class TelemetryWindow(QWidget):
         # Populate table
         for row, (lap, data) in enumerate(sorted(self.lap_timings.items())):
             # Lap number
-            lap_item = QTableWidgetItem(str(lap))
+            lap_item = QTableWidgetItem()
+            lap_item.setData(Qt.DisplayRole, lap)  # Store as integer for proper sorting
             lap_item.setTextAlignment(Qt.AlignCenter)
             
             # Lap time
@@ -1473,9 +1472,25 @@ class TelemetryWindow(QWidget):
             self.timing_map_layout.addWidget(error_label)
             return
 
-        # use selected lap or default to best lap
+        # Use selected lap or default to best lap
         if selected_lap is None:
             selected_lap = self.best_lap
+
+        # Check if selected lap exists in lap_timings (might have been deleted if it was incomplete)
+        if selected_lap not in self.lap_timings:
+            # Fall back to best lap
+            if self.best_lap and self.best_lap in self.lap_timings:
+                selected_lap = self.best_lap
+            else:
+                # Just use any valid lap
+                if len(self.lap_timings) > 0:
+                    selected_lap = min(self.lap_timings.keys())
+                else:
+                    error_label = QLabel("No valid laps to display")
+                    error_label.setAlignment(Qt.AlignCenter)
+                    error_label.setStyleSheet("font-size: 14px; color: #6b7280;")
+                    self.timing_map_layout.addWidget(error_label)
+                    return
 
         # Get Selected Lap data
         lap_data = self.telemetry_df[
@@ -2003,31 +2018,21 @@ class TelemetryWindow(QWidget):
 
         # Get valid laps
         valid_laps = sorted(self.telemetry_df[self.telemetry_df["Lap"] > 0]["Lap"].unique())
-        if len(valid_laps) > 1:
-            valid_laps = valid_laps[:-1]
 
         for lap in valid_laps:
-           
-            lap_times_next = self.telemetry_df[
+            # Get lap time from the NEXT lap's LapLastLapTime
+            lap_times = self.telemetry_df[
                 (self.telemetry_df["Lap"] == lap + 1) &
                 (self.telemetry_df["LapLastLapTime"] > 0)
             ]["LapLastLapTime"]
-            
-    
-            lap_times_current = self.telemetry_df[
-                (self.telemetry_df["Lap"] == lap) &
-                (self.telemetry_df["LapLastLapTime"] > 0)
-            ]["LapLastLapTime"]
 
-      
-            if len(lap_times_next) > 0:
-                lap_time = lap_times_next.iloc[0]
-            elif len(lap_times_current) > 0:
-                lap_time = lap_times_current.iloc[0]
+            if len(lap_times) > 0:
+                lap_time = lap_times.iloc[-1]  # Use last value
             else:
+                # Next lap doesn't exist - calculate from SessionTick
                 lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap]
                 if len(lap_data) > 1:
-                    lap_time = lap_data["SessionTime"].iloc[-1] - lap_data["SessionTime"].iloc[0]
+                    lap_time = (lap_data["SessionTick"].iloc[-1] - lap_data["SessionTick"].iloc[0]) / 60
                 else:
                     lap_time = None
 
@@ -2036,6 +2041,7 @@ class TelemetryWindow(QWidget):
                 seconds = int(lap_time % 60)
                 millis = int((lap_time - int(lap_time)) * 1000)
                 lap_time_str = f"{minutes:02}:{seconds:02}.{millis:03}"
+                
                 self.lap_data_dict[int(lap)] = {
                     'time': lap_time,
                     'time_str': lap_time_str
@@ -2045,6 +2051,12 @@ class TelemetryWindow(QWidget):
                     'time': float('inf'),
                     'time_str': 'N/A'
                 }
+
+        # Remove the last lap (incomplete cooldown lap) from display
+        if len(self.lap_data_dict) > 0:
+            last_lap = max(self.lap_data_dict.keys())
+            if last_lap in self.lap_data_dict:
+                del self.lap_data_dict[last_lap]
 
         self.update_lap_list()
 
@@ -2099,6 +2111,7 @@ class TelemetryWindow(QWidget):
             item.setData(Qt.UserRole, lap)
             self.lap_list.addItem(item)
 
+            
     def update_pedal_track_map_from_list(self):
         current_item = self.lap_list.currentItem()
         if current_item:
@@ -2573,6 +2586,25 @@ class TelemetryWindow(QWidget):
                         self.playback_throttle_data.append(float(row["Throttle"]))
                         self.playback_brake_data.append(float(row["Brake"]))
                         self.playback_gear_data.append(float(row["Gear"]))
+                    
+                    # removing outlier issues due to iRacing sometimes struggling to record sharp changes 
+                    if len(self.playback_time_data) == 0 or row_time > self.playback_time_data[-1]:
+                        throttle_val = float(row["Throttle"])
+                        brake_val = float(row["Brake"])
+                        
+                        # Spike filter: if braking >20% and throttle spike detected, filter it out
+                        if len(self.playback_throttle_data) > 0:
+                            last_throttle = self.playback_throttle_data[-1]
+                            
+                            # If braking and sudden throttle spike (>30% jump), cap it
+                            if brake_val > 20 and throttle_val > last_throttle + 30:
+                                throttle_val = last_throttle  # Keep previous value instead
+                        
+                        self.playback_time_data.append(row_time)
+                        self.playback_throttle_data.append(throttle_val)
+                        self.playback_brake_data.append(brake_val)
+                        self.playback_gear_data.append(float(row["Gear"]))
+
         elif self.playback_index == last_plotted_index:
             pass
 
@@ -2596,10 +2628,30 @@ class TelemetryWindow(QWidget):
                 break
 
         windowed_times = times[start_idx:]
-        windowed_throttle = throttles[start_idx:]
-        windowed_brake = brakes[start_idx:]
+        windowed_throttle_raw = throttles[start_idx:]
+        windowed_brake_raw = brakes[start_idx:]
         windowed_gear = gears[start_idx:]
 
+        # Aggressive spike removal for throttle
+        # If braking >10%, throttle should be near 0. Any spike is noise.
+        windowed_throttle = []
+        for i, (thr, brk) in enumerate(zip(windowed_throttle_raw, windowed_brake_raw)):
+            if brk > 10 and thr > 10:  # Braking + throttle spike = invalid
+                # Replace with 0 or previous valid value
+                if i > 0 and windowed_throttle[-1] < 5:
+                    windowed_throttle.append(windowed_throttle[-1])
+                else:
+                    windowed_throttle.append(0)
+            else:
+                windowed_throttle.append(thr)
+
+        # Apply median filter to smooth remaining noise
+        if len(windowed_throttle) > 3:
+            windowed_throttle = list(median_filter(windowed_throttle, size=5))
+            
+        windowed_brake = list(median_filter(windowed_brake_raw, size=3)) if len(windowed_brake_raw) > 3 else windowed_brake_raw
+
+        
         # Update pedal graph
         self.throttle_line.set_data(windowed_times, windowed_throttle)
         self.brake_line.set_data(windowed_times, windowed_brake)
