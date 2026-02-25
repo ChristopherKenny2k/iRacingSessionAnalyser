@@ -123,6 +123,8 @@ class ZoomableCanvas(FigureCanvas):
 
             self.draw()
 
+#----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 # ----------------------
 # Full-screen window after CSV load
 # ----------------------
@@ -222,7 +224,7 @@ class TelemetryWindow(QWidget):
         # -=PAGES=-
         self.page_overview = self.make_overview_page()
         self.page_timings  = self.make_timings_page()
-        self.page_tyres    = self.make_page("Tyres")
+        self.page_tyres    = self.make_tyres_page()
         self.page_pedals   = self.make_pedals_page()
         self.page_fuel     = self.make_page("Fuel")
         self.page_data     = self.make_page("Data Viewer")
@@ -398,6 +400,11 @@ class TelemetryWindow(QWidget):
         canvas = FigureCanvas(fig)
         return canvas
     
+
+
+#----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
     # -----------------------
     # Overview Page
     # -----------------------
@@ -679,7 +686,7 @@ class TelemetryWindow(QWidget):
 
         return page
 
-
+#----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     # -----------------------
     # Make a page for the stacked widget
@@ -763,6 +770,10 @@ class TelemetryWindow(QWidget):
         stats_bar = self.create_session_stats_bar()
         layout.addWidget(stats_bar)
 
+
+
+        # Main content area - Table and Map side by side
+        content_layout = QHBoxLayout()
         
         content_layout = QHBoxLayout()
         content_layout.setSpacing(15)
@@ -852,6 +863,11 @@ class TelemetryWindow(QWidget):
         
         self.draw_timing_map()
 
+        # ADD THIS - Lap time chart
+        lap_chart = self.create_lap_time_chart()
+        if lap_chart:
+            layout.addWidget(lap_chart)
+
         return page
 
     def calculate_lap_timings(self):
@@ -868,18 +884,16 @@ class TelemetryWindow(QWidget):
             if len(lap_data) == 0:
                 continue
 
-            # Get lap time from the NEXT lap's LapLastLapTime
             # iRacing does not report lap time of last lap in session due to cooldown lap not being fully completed, 
-            # therefore I use session ticks (60 per second) to calculate the time (usually off by +- .006s)
+            # therefore i use session ticks (60 per second) to calculate the time (usually off by +- .006s)
             lap_time_rows = self.telemetry_df[
                 (self.telemetry_df["Lap"] == lap + 1) &
                 (self.telemetry_df["LapLastLapTime"] > 0)
             ]["LapLastLapTime"]
 
             if len(lap_time_rows) > 0:
-                lap_time = lap_time_rows.iloc[-1]  # Use last value in case it updated mid-lap
+                lap_time = lap_time_rows.iloc[-1]  
             else:
-                # Next lap doesn't exist or has no LapLastLapTime - calculate from SessionTick
                 if len(lap_data) > 1:
                     lap_time = (lap_data["SessionTick"].iloc[-1] - lap_data["SessionTick"].iloc[0]) / 60
                 else:
@@ -887,24 +901,57 @@ class TelemetryWindow(QWidget):
 
             if lap_time <= 0:
                 continue
-                
-            # Check if lap is valid (on track entire time)
-            is_valid = (lap_data["IsOnTrackCar"] == 1).all()
-            
+
+            is_on_track = (lap_data["IsOnTrack"] == 1).all()
+
+            # Check for distance anomalies (going backwards or off track)
+            lap_data_sorted_by_time = lap_data.sort_values("SessionTime")
+            dist_pct = lap_data_sorted_by_time["LapDistPct"].values
+            is_monotonic = True
+            if len(dist_pct) > 1:
+                for i in range(1, len(dist_pct)):
+                    if dist_pct[i] < dist_pct[i-1] - 5:
+                        is_monotonic = False
+                        break
+
+            # check for if car has gone off track or not to count a valid lap
+            speeds = lap_data_sorted_by_time["Speed"].values * 3.6 
+            has_speed_anomaly = False
+            if len(speeds) > 10:
+                slow_count = (speeds < 20).sum()
+                if slow_count > 60:  
+                    has_speed_anomaly = True
+
+            is_valid = is_on_track and is_monotonic and not has_speed_anomaly
+           
+            print(f"\n=== Lap {lap} Validity Check ===")
+            print(f"is_on_track: {is_on_track}")
+            print(f"is_monotonic: {is_monotonic}")
+            print(f"IsOnTrackCar values: {lap_data['IsOnTrackCar'].value_counts().to_dict()}")
+            print(f"LapDistPct range: {dist_pct.min():.2f} to {dist_pct.max():.2f}")
+            print(f"Final is_valid: {is_valid}")
+
             # Calculate sector times based on LapDistPct
-            lap_data_sorted = lap_data.sort_values("LapDistPct").reset_index(drop=True)
-            
+            lap_data_sorted = lap_data.sort_values("SessionTime").reset_index(drop=True)
+
             if len(lap_data_sorted) > 0:
                 lap_start_time = lap_data_sorted["SessionTime"].iloc[0]
                 lap_end_time = lap_data_sorted["SessionTime"].iloc[-1]
                 
-                # Sector 1: 0% to 33.33%
-                sector1_end_idx = (lap_data_sorted["LapDistPct"] - 33.33).abs().idxmin()
-                sector1_end_time = lap_data_sorted.loc[sector1_end_idx, "SessionTime"]
+                # Find times at sector boundaries by finding closest LapDistPct
+                # Sector 1 ends at 33.33%
+                sector1_rows = lap_data_sorted[lap_data_sorted["LapDistPct"] <= 33.33]
+                if len(sector1_rows) > 0:
+                    sector1_end_time = sector1_rows["SessionTime"].iloc[-1]
+                else:
+                    sector1_end_time = lap_start_time
                 
-                # Sector 2: 33.33% to 66.66%
-                sector2_end_idx = (lap_data_sorted["LapDistPct"] - 66.66).abs().idxmin()
-                sector2_end_time = lap_data_sorted.loc[sector2_end_idx, "SessionTime"]
+                # Sector 2 ends at 66.66%
+                sector2_rows = lap_data_sorted[lap_data_sorted["LapDistPct"] <= 66.66]
+                if len(sector2_rows) > 0:
+                    sector2_end_time = sector2_rows["SessionTime"].iloc[-1]
+                else:
+                    sector2_end_time = sector1_end_time
                 
                 # Calculate sector times
                 sector1_time = sector1_end_time - lap_start_time
@@ -1670,9 +1717,943 @@ class TelemetryWindow(QWidget):
 
         legend_layout.addStretch()
         return legend_widget
+    
+    def create_lap_time_chart(self):
+        """Create a line chart showing lap time progression"""
+        from matplotlib.figure import Figure
+        import matplotlib.pyplot as plt
+        from matplotlib.ticker import FuncFormatter
+        import numpy as np
+        
+        sorted_laps = sorted(self.lap_timings.keys())
+        lap_numbers = []
+        lap_times = []
+        
+        for lap in sorted_laps:
+            lap_numbers.append(lap)
+            lap_times.append(self.lap_timings[lap]['time'])
+        
+        if len(lap_times) == 0:
+            return None
+        
+        fig = Figure(figsize=(12, 4), facecolor='#f8f9fa')
+        ax = fig.add_subplot(111)
+       
+        ax.plot(lap_numbers, lap_times, color='#2563eb', linewidth=2, marker='o', 
+                markersize=8, markerfacecolor='#2563eb', markeredgecolor='white', 
+                markeredgewidth=2, zorder=3)
+     
+        best_lap_idx = lap_numbers.index(self.best_lap)
+        ax.plot(self.best_lap, lap_times[best_lap_idx], 'o', markersize=14, 
+                markerfacecolor='#22c55e', markeredgecolor='white', 
+                markeredgewidth=2, zorder=4)
+        
+        # Highlight slowest lap (red)
+        slowest_lap = max(self.lap_timings.keys(), key=lambda x: self.lap_timings[x]['time'])
+        slowest_lap_idx = lap_numbers.index(slowest_lap)
+        ax.plot(slowest_lap, lap_times[slowest_lap_idx], 'o', markersize=14, 
+                markerfacecolor='#ef4444', markeredgecolor='white', 
+                markeredgewidth=2, zorder=4)
 
+        # y axis limits with 2s padding
+        min_time = min(lap_times)
+        max_time = max(lap_times)
+        ax.set_ylim(min_time - 2, max_time + 2)
+        
+        # Format Y axis as mm:ss.ms
+        def format_time(seconds, pos):
+            minutes = int(seconds // 60)
+            secs = int(seconds % 60)
+            millis = int((seconds - int(seconds)) * 1000)
+            return f"{minutes:02}:{secs:02}.{millis:03}"
+        
+        ax.yaxis.set_major_formatter(FuncFormatter(format_time))
+        
+       
+        ax.set_xlabel("Lap Number", fontsize=11, fontweight='bold', color='#111827')
+        ax.set_ylabel("Lap Time", fontsize=11, fontweight='bold', color='#111827')
+        ax.set_title("Lap Time Progression", fontsize=13, fontweight='bold', 
+                    color='#111827', pad=10)
+        
+        ax.set_facecolor('white')
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.tick_params(colors='#111827', labelsize=10)
+        
+       
+        ax.set_xticks(lap_numbers)
+        
+       
+        for spine in ax.spines.values():
+            spine.set_edgecolor('#d1d5db')
+            spine.set_linewidth(1)
+        
+        fig.subplots_adjust(left=0.08, right=0.98, top=0.88, bottom=0.15)
+        
+     
+        canvas = FigureCanvas(fig)
+        canvas.setFixedHeight(300)
+        
+        # hover tooltip with lap info
+        def on_hover(event):
+            if event.inaxes == ax:
+                for i, (lap_num, lap_time) in enumerate(zip(lap_numbers, lap_times)):
+                    if abs(event.xdata - lap_num) < 0.3 and abs(event.ydata - lap_time) < 0.5:
+                        minutes = int(lap_time // 60)
+                        secs = int(lap_time % 60)
+                        millis = int((lap_time - int(lap_time)) * 1000)
+                        tooltip_text = f"Lap {lap_num}: {minutes:02}:{secs:02}.{millis:03}"
+                        QToolTip.showText(canvas.mapToGlobal(event.guiEvent.pos()), tooltip_text)
+                        return
+                QToolTip.hideText()
+        
+        canvas.mpl_connect('motion_notify_event', on_hover)
+        
+        return canvas
     
 
+#----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    #================
+    # Tyre Data Page
+    #================
+    def make_tyres_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        title = QLabel("Tyre Data Analysis")
+        title.setStyleSheet("""
+            font-size: 38px;
+            font-weight: bold;
+            color: #000007;
+        """)
+        title.setAlignment(Qt.AlignLeft)
+        layout.addWidget(title)
+
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(15)
+
+        # left side - lap selector
+        lap_selector_container = QWidget()
+        lap_selector_container.setFixedWidth(250)
+        lap_selector_layout = QVBoxLayout(lap_selector_container)
+        lap_selector_layout.setContentsMargins(0, 0, 0, 0)
+        lap_selector_layout.setSpacing(0)
+
+        lap_selector_title = QLabel("Select Lap")
+        lap_selector_title.setStyleSheet("font-size: 18px; font-weight: bold; color: #000000;")
+        lap_selector_layout.addWidget(lap_selector_title)
+
+        self.tyre_lap_list = QListWidget()
+        self.tyre_lap_list.setStyleSheet("""
+            QListWidget {
+                background-color: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 4px;
+                font-size: 18px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid #f3f4f6;
+                color: #000000;
+            }
+            QListWidget::item:selected {
+                background-color: #2563eb;
+                color: white;
+            }
+            QListWidget::item:hover {
+                background-color: #eff6ff;
+                color: #000000;
+            }
+        """)
+        self.tyre_lap_list.itemClicked.connect(self.update_tyre_data_display)
+        lap_selector_layout.addWidget(self.tyre_lap_list)
+        
+        for lap in sorted(self.lap_timings.keys()):
+            lap_info = self.lap_timings[lap]
+            item_text = f"Lap {lap} - {lap_info['time_str']}"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.UserRole, lap)
+            self.tyre_lap_list.addItem(item)
+
+        content_layout.addWidget(lap_selector_container)
+
+        #above tyre display
+        right_container = QWidget()
+        right_layout = QVBoxLayout(right_container)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(10)
+
+        top_row_container = QWidget()
+        top_row_layout = QHBoxLayout(top_row_container)
+        top_row_layout.setContentsMargins(0, 0, 0, 0)
+        top_row_layout.setSpacing(10)
+
+        self.tyre_visual_container = QWidget()
+        self.tyre_visual_layout = QVBoxLayout(self.tyre_visual_container)
+        self.tyre_visual_layout.setContentsMargins(0, 0, 0, 0)
+        top_row_layout.addWidget(self.tyre_visual_container)
+
+        self.tyre_map_container = QWidget()
+        self.tyre_map_layout = QVBoxLayout(self.tyre_map_container)
+        self.tyre_map_layout.setContentsMargins(0, 0, 0, 0)
+        top_row_layout.addWidget(self.tyre_map_container)
+
+        right_layout.addWidget(top_row_container)
+
+        bottom_row_container = QWidget()
+        bottom_row_layout = QHBoxLayout(bottom_row_container)
+        bottom_row_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_row_layout.setSpacing(10)
+
+        self.tyre_correlation_container = QWidget()
+        self.tyre_correlation_layout = QVBoxLayout(self.tyre_correlation_container)
+        self.tyre_correlation_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_row_layout.addWidget(self.tyre_correlation_container)
+
+        self.tyre_chart_container = QWidget()
+        self.tyre_chart_layout = QVBoxLayout(self.tyre_chart_container)
+        self.tyre_chart_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_row_layout.addWidget(self.tyre_chart_container)
+
+        right_layout.addWidget(bottom_row_container)
+
+        content_layout.addWidget(right_container)
+        content_layout.addStretch()
+
+        layout.addLayout(content_layout)
+        layout.addStretch()
+
+        #default to first lap
+        if self.tyre_lap_list.count() > 0:
+            self.tyre_lap_list.setCurrentRow(0)
+            self.update_tyre_data_display()
+
+        return page
+    
+    # getting tyre temps and assigning colour grom blue-teal-green-yellow-orange-red colour spectrum in relation to tyre temps
+    # i've used a wide range here as optimal tyre temps can vary heavily across different car classes
+    def get_tyre_temp_color(self, temp):
+        if temp < 50:
+            return '#0ea5e9'  # Blue (cold)
+        elif temp < 65:
+            #cold
+            ratio = (temp - 50) / 15
+            return self.interpolate_color('#0ea5e9', '#14b8a6', ratio)
+        elif temp < 80:
+            #low optimal
+            ratio = (temp - 65) / 15
+            return self.interpolate_color('#14b8a6', '#22c55e', ratio)
+        elif temp < 90:
+            # high optimal
+            ratio = (temp - 80) / 10
+            return self.interpolate_color('#22c55e', '#eab308', ratio)
+        elif temp < 100:
+            #slightly hot
+            ratio = (temp - 90) / 10
+            return self.interpolate_color('#eab308', '#f97316', ratio)
+        elif temp < 110:
+            #very hot
+            ratio = (temp - 100) / 10
+            return self.interpolate_color('#f97316', '#ef4444', ratio)
+        else:
+            return '#ef4444'
+
+    def interpolate_color(self, color1, color2, ratio):
+        """Interpolate between two hex colors"""
+        c1 = [int(color1[i:i+2], 16) for i in (1, 3, 5)]
+        c2 = [int(color2[i:i+2], 16) for i in (1, 3, 5)]
+        
+        r = int(c1[0] + (c2[0] - c1[0]) * ratio)
+        g = int(c1[1] + (c2[1] - c1[1]) * ratio)
+        b = int(c1[2] + (c2[2] - c1[2]) * ratio)
+        
+        return f'#{r:02x}{g:02x}{b:02x}'
+    
+    # top down view of car to display tyre temp data, each tyre is split into the three parts to reflect the inner, centre, and outer tyre temps similar to the display in Assetto Corsa Competizione
+    def create_tyre_top_down_visual(self, lap):
+        from matplotlib.figure import Figure
+        from matplotlib.patches import Rectangle
+        import numpy as np
+        
+        lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap].copy()
+        if len(lap_data) == 0:
+            return None
+
+        tyres = {
+            'LF': {
+                'L': lap_data['LFtempL'].mean(), 
+                'M': lap_data['LFtempM'].mean(), 
+                'R': lap_data['LFtempR'].mean(),
+                'Core': (lap_data['LFtempCL'].mean() + lap_data['LFtempCM'].mean() + lap_data['LFtempCR'].mean()) / 3
+            },
+            'RF': {
+                'L': lap_data['RFtempL'].mean(), 
+                'M': lap_data['RFtempM'].mean(), 
+                'R': lap_data['RFtempR'].mean(),
+                'Core': (lap_data['RFtempCL'].mean() + lap_data['RFtempCM'].mean() + lap_data['RFtempCR'].mean()) / 3
+            },
+            'LR': {
+                'L': lap_data['LRtempL'].mean(), 
+                'M': lap_data['LRtempM'].mean(), 
+                'R': lap_data['LRtempR'].mean(),
+                'Core': (lap_data['LRtempCL'].mean() + lap_data['LRtempCM'].mean() + lap_data['LRtempCR'].mean()) / 3
+            },
+            'RR': {
+                'L': lap_data['RRtempL'].mean(), 
+                'M': lap_data['RRtempM'].mean(), 
+                'R': lap_data['RRtempR'].mean(),
+                'Core': (lap_data['RRtempCL'].mean() + lap_data['RRtempCM'].mean() + lap_data['RRtempCR'].mean()) / 3
+            },
+        }
+                
+        fig = Figure(figsize=(10, 8), facecolor='#f8f9fa')
+        ax = fig.add_subplot(111)
+        
+        self.tyre_top_down_ax = ax
+        
+        # "body" of car
+        car_body = Rectangle((2.0, 1.8), 3.5, 4.5, facecolor='#9ca3af', edgecolor='#000000', linewidth=2)
+        ax.add_patch(car_body)
+        
+        # Tyre graphic dimensions
+        tyre_width = 1.5
+        tyre_height = 1.7
+        segment_width = tyre_width / 3
+        
+        # positioning of tyre graphics
+        tyre_positions = [
+            (0.3, 5.5, 'LF', tyres['LF']),
+            (5.7, 5.5, 'RF', tyres['RF']),
+            (0.3, 0.5, 'LR', tyres['LR']),
+            (5.7, 0.5, 'RR', tyres['RR']),
+        ]
+        
+        for x, y, label, temps in tyre_positions:
+
+            # tyre lable (RF|LF|RR|LR)
+            ax.text(x + tyre_width/2, y + tyre_height + 0.3, label, 
+                ha='center', va='bottom', fontsize=14, fontweight='bold', color='#000000')
+        
+
+            for i, (segment_label, temp) in enumerate([('L', temps['L']), ('M', temps['M']), ('R', temps['R'])]):
+                color = self.get_tyre_temp_color(temp)
+                segment = Rectangle((x + i * segment_width, y), segment_width, tyre_height, 
+                                facecolor=color, edgecolor='#000000', linewidth=1.5)
+                ax.add_patch(segment)
+                
+                text_x = x + i * segment_width + segment_width/2
+                text_y = y + tyre_height/2
+                ax.text(text_x, text_y, f'{temp:.0f}°', 
+                    ha='center', va='center', fontsize=10, fontweight='bold', color='white')
+            
+            ax.text(x + tyre_width/2, y - 0.4, f"Core: {temps['Core']:.0f}°C", 
+               ha='center', va='top', fontsize=11, fontweight='bold', color='#111827')
+        
+        ax.set_xlim(0, 8)
+        ax.set_ylim(0, 8)
+        ax.set_aspect('equal')
+        ax.axis('off')
+        ax.set_title(f'Lap {lap} - Tyre Temperatures (Live)', 
+                    fontsize=14, fontweight='bold', pad=10)
+        
+        fig.subplots_adjust(left=0.05, right=0.95, top=0.92, bottom=0.05)
+        
+        canvas = FigureCanvas(fig)
+        canvas.setFixedSize(700, 600)
+        
+        self.tyre_top_down_canvas = canvas
+        
+        return canvas
+
+    def create_tyre_temp_track_map(self, lap):
+        from matplotlib.figure import Figure
+        from matplotlib.collections import LineCollection
+        import numpy as np
+        
+        lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap].copy()
+        if len(lap_data) == 0:
+            return None
+        
+        lap_data = lap_data.sort_values("SessionTick").reset_index(drop=True)
+        
+        avg_temps = (
+            lap_data['LFtempL'] + lap_data['LFtempM'] + lap_data['LFtempR'] +
+            lap_data['RFtempL'] + lap_data['RFtempM'] + lap_data['RFtempR'] +
+            lap_data['LRtempL'] + lap_data['LRtempM'] + lap_data['LRtempR'] +
+            lap_data['RRtempL'] + lap_data['RRtempM'] + lap_data['RRtempR']
+        ) / 12
+        
+        fig = Figure(figsize=(8, 8), facecolor='#f8f9fa')
+        ax = fig.add_subplot(111)
+        
+        points = np.array([lap_data["Lon"].values, lap_data["Lat"].values]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
+        
+        colors = [self.get_tyre_temp_color(temp) for temp in avg_temps[:-1]]
+        
+        lc = LineCollection(segments, colors=colors, linewidths=4)
+        ax.add_collection(lc)
+        
+        start_lon = lap_data["Lon"].iloc[0]
+        start_lat = lap_data["Lat"].iloc[0]
+        second_lon = lap_data["Lon"].iloc[1]
+        second_lat = lap_data["Lat"].iloc[1]
+        
+        dx = second_lon - start_lon
+        dy = second_lat - start_lat
+        perp_dx, perp_dy = -dy, dx
+        length = np.sqrt(perp_dx**2 + perp_dy**2)
+        if length > 0:
+            perp_dx = perp_dx / length * 0.0003
+            perp_dy = perp_dy / length * 0.0003
+        
+        ax.plot([start_lon - perp_dx, start_lon + perp_dx],
+                [start_lat - perp_dy, start_lat + perp_dy],
+                color='black', linewidth=3, zorder=10)
+        
+        ax.set_title(f'Lap {lap} - Tyre Temperature Track Map',
+                    fontsize=14, fontweight='bold', pad=10)
+        ax.set_aspect('equal')
+        ax.set_facecolor('white')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlim(lap_data["Lon"].min() - 0.0005, lap_data["Lon"].max() + 0.0005)
+        ax.set_ylim(lap_data["Lat"].min() - 0.0005, lap_data["Lat"].max() + 0.0005)
+        
+        fig.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02)
+        
+        canvas = FigureCanvas(fig)
+        canvas.setFixedSize(600, 600)
+
+        #DRIVER DOT
+        self.tyre_driver_dot, = ax.plot(
+            lap_data["Lon"].iloc[0],
+            lap_data["Lat"].iloc[0],
+            'o', color='black', markersize=10, zorder=20
+        )
+
+        self.tyre_map_ax = ax
+
+        canvas = FigureCanvas(fig)
+        canvas.setFixedSize(600, 600)
+
+        self.tyre_map_canvas = canvas
+
+        return canvas
+    
+    def create_tyre_temp_colorbar(self):
+        from matplotlib.figure import Figure
+        from matplotlib import cm
+        from matplotlib.colors import LinearSegmentedColormap
+        import numpy as np
+        
+        colorbar_container = QWidget()
+        colorbar_container.setFixedWidth(120)
+        
+        container_layout = QVBoxLayout(colorbar_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(5)
+        
+        title = QLabel("Temperature")
+        title.setStyleSheet("font-size: 11px; font-weight: bold; color: #111827;")
+        title.setAlignment(Qt.AlignCenter)
+        container_layout.addWidget(title)
+        
+        fig = Figure(figsize=(1.5, 6), facecolor='none')
+        ax = fig.add_subplot(111)
+        
+        colors_list = []
+        temps = np.linspace(50, 110, 100)
+        for temp in temps:
+            colors_list.append(self.get_tyre_temp_color(temp))
+        
+        gradient = np.linspace(0, 1, 256).reshape(256, 1)
+        
+        color_array = np.zeros((256, 3))
+        for i in range(256):
+            temp = 50 + (110 - 50) * (i / 255)
+            hex_color = self.get_tyre_temp_color(temp)
+            rgb = [int(hex_color[j:j+2], 16)/255 for j in (1, 3, 5)]
+            color_array[i] = rgb
+        
+        ax.imshow(gradient, aspect='auto', cmap=LinearSegmentedColormap.from_list('temp', color_array), origin='lower')
+        
+        ax.set_xticks([])
+        ax.set_yticks([0, 64, 128, 192, 255])
+        ax.set_yticklabels(['50°C', '65°C', '80°C', '95°C', '110°C'], fontsize=9)
+        
+        ax.tick_params(colors='#111827', labelsize=9)
+        
+        fig.subplots_adjust(left=0.5, right=0.85, top=0.98, bottom=0.02)
+        
+        canvas = FigureCanvas(fig)
+        canvas.setFixedSize(120, 600)
+        
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(canvas)
+        
+        colorbar_widget = QWidget()
+        colorbar_widget.setLayout(layout)
+        
+        container_layout.addWidget(colorbar_widget)
+        
+        return colorbar_container
+
+    # LAP time | Tyre temp - correlation graph
+    def create_tyre_temp_correlation(self):
+        from matplotlib.figure import Figure
+        import numpy as np
+        
+        lap_numbers = []
+        lap_times = []
+        avg_temps = []
+        
+        for lap in sorted(self.lap_timings.keys()):
+            lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap].copy()
+            if len(lap_data) == 0:
+                continue
+            
+            avg_temp = (
+                lap_data['LFtempL'].mean() + lap_data['LFtempM'].mean() + lap_data['LFtempR'].mean() +
+                lap_data['RFtempL'].mean() + lap_data['RFtempM'].mean() + lap_data['RFtempR'].mean() +
+                lap_data['LRtempL'].mean() + lap_data['LRtempM'].mean() + lap_data['LRtempR'].mean() +
+                lap_data['RRtempL'].mean() + lap_data['RRtempM'].mean() + lap_data['RRtempR'].mean()
+            ) / 12
+            
+            lap_time = self.lap_timings[lap]['time']
+            
+            if lap_time != float('inf'):
+                lap_numbers.append(lap)
+                lap_times.append(lap_time)
+                avg_temps.append(avg_temp)
+        
+        if len(lap_times) == 0:
+            return None
+        
+        fig = Figure(figsize=(10, 4), facecolor='#f8f9fa')
+        ax = fig.add_subplot(111)
+        
+        scatter = ax.scatter(avg_temps, lap_times, s=100, c=lap_numbers, 
+                            cmap='viridis', edgecolors='black', linewidths=1.5, zorder=3)
+        
+        for lap_num, temp, time in zip(lap_numbers, avg_temps, lap_times):
+            ax.annotate(f'{lap_num}', (temp, time), 
+                    fontsize=9, fontweight='bold', ha='center', va='center')
+        
+        if len(avg_temps) > 1:
+            z = np.polyfit(avg_temps, lap_times, 1)
+            p = np.poly1d(z)
+            x_trend = np.linspace(min(avg_temps), max(avg_temps), 100)
+            ax.plot(x_trend, p(x_trend), '--', color='#ef4444', linewidth=2, 
+                alpha=0.7, label='Trend', zorder=2)
+            
+            correlation = np.corrcoef(avg_temps, lap_times)[0, 1]
+            ax.text(0.98, 0.98, f'Correlation: {correlation:.3f}',
+                transform=ax.transAxes, ha='right', va='top',
+                fontsize=11, fontweight='bold',
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        
+        ax.set_xlabel('Average Tyre Temperature (°C)', fontsize=11, fontweight='bold', color='#111827')
+        ax.set_ylabel('Lap Time (s)', fontsize=11, fontweight='bold', color='#111827')
+        ax.set_title('Lap Time vs Tyre Temperature Correlation', 
+                    fontsize=13, fontweight='bold', color='#111827', pad=10)
+        
+        ax.set_facecolor('white')
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.tick_params(colors='#111827', labelsize=10)
+        
+        for spine in ax.spines.values():
+            spine.set_edgecolor('#d1d5db')
+            spine.set_linewidth(1)
+        
+        if len(avg_temps) > 1:
+            ax.legend(loc='upper left', fontsize=9)
+        
+        fig.subplots_adjust(left=0.10, right=0.98, top=0.90, bottom=0.15)
+        
+        canvas = FigureCanvas(fig)
+        canvas.setFixedHeight(300)
+        return canvas
+    
+    #Avg tyre temp through lap line chart
+    def create_tyre_temp_line_chart(self, lap):
+        from matplotlib.figure import Figure
+        import numpy as np
+        
+        lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap].copy()
+        if len(lap_data) == 0:
+            return None
+        
+        lap_data = lap_data.sort_values("SessionTick").reset_index(drop=True)
+
+        lap_start_tick = lap_data["SessionTick"].iloc[0]
+        time_seconds = (lap_data["SessionTick"] - lap_start_tick) / 60
+
+        lf_avg = (lap_data['LFtempL'] + lap_data['LFtempM'] + lap_data['LFtempR']) / 3
+        rf_avg = (lap_data['RFtempL'] + lap_data['RFtempM'] + lap_data['RFtempR']) / 3
+        lr_avg = (lap_data['LRtempL'] + lap_data['LRtempM'] + lap_data['LRtempR']) / 3
+        rr_avg = (lap_data['RRtempL'] + lap_data['RRtempM'] + lap_data['RRtempR']) / 3
+        
+        fig = Figure(figsize=(12, 4), facecolor='#f8f9fa')
+        ax = fig.add_subplot(111)
+        
+        self.tyre_chart_ax = ax
+        
+        ax.plot(time_seconds, lf_avg, linewidth=2, label='LF', color='#3b82f6')
+        ax.plot(time_seconds, rf_avg, linewidth=2, label='RF', color='#ef4444')
+        ax.plot(time_seconds, lr_avg, linewidth=2, label='LR', color='#10b981')
+        ax.plot(time_seconds, rr_avg, linewidth=2, label='RR', color='#f59e0b')
+        
+        #Optimal temp range TODO: verify
+        ax.axhspan(75, 85, alpha=0.1, color='green', label='Optimal Range')
+        
+        # sweeperline in tandem with playback positioning
+        self.tyre_sweep_line = ax.axvline(x=0, color='black', linewidth=2, linestyle='-', alpha=0.7, zorder=10)
+        
+        ax.set_xlabel('Time (seconds)', fontsize=11, fontweight='bold', color='#111827')
+        ax.set_ylabel('Temperature (°C)', fontsize=11, fontweight='bold', color='#111827')
+        ax.set_title(f'Lap {lap} - Tyre Temperature Progression', 
+                    fontsize=13, fontweight='bold', color='#111827', pad=10)
+        
+        ax.set_facecolor('white')
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.tick_params(colors='#111827', labelsize=10)
+        ax.legend(loc='upper right', fontsize=10, framealpha=0.9)
+        
+        for spine in ax.spines.values():
+            spine.set_edgecolor('#d1d5db')
+            spine.set_linewidth(1)
+        
+        fig.subplots_adjust(left=0.08, right=0.98, top=0.88, bottom=0.15)
+        
+        canvas = FigureCanvas(fig)
+        canvas.setFixedHeight(300)
+        
+        self.tyre_chart_canvas = canvas
+        
+        return canvas
+    
+    def update_tyre_data_display(self):
+        current_item = self.tyre_lap_list.currentItem()
+        if not current_item:
+            return
+        
+        selected_lap = current_item.data(Qt.UserRole)
+        
+        self.current_tyre_lap_data = self.telemetry_df[
+            self.telemetry_df["Lap"] == selected_lap
+        ].copy()
+        self.current_tyre_lap_data = self.current_tyre_lap_data.sort_values("SessionTick").reset_index(drop=True)
+        
+        self.tyre_playback_index = 0
+        self.tyre_current_tick = 0
+        self.tyre_playback_active = False
+        
+        if not hasattr(self, 'tyre_playback_timer'):
+            self.tyre_playback_timer = QTimer()
+            self.tyre_playback_timer.timeout.connect(self.tyre_playback_step)
+        
+        while self.tyre_visual_layout.count():
+            child = self.tyre_visual_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        while self.tyre_map_layout.count():
+            child = self.tyre_map_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        while self.tyre_correlation_layout.count():
+            child = self.tyre_correlation_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        while self.tyre_chart_layout.count():
+            child = self.tyre_chart_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        top_down = self.create_tyre_top_down_visual(selected_lap)
+        if top_down:
+            self.tyre_visual_layout.addWidget(top_down)
+        
+        track_map = self.create_tyre_temp_track_map(selected_lap)
+        if track_map:
+            # Create horizontal layout for map + colorbar
+            map_with_colorbar = QWidget()
+            map_colorbar_layout = QHBoxLayout(map_with_colorbar)
+            map_colorbar_layout.setContentsMargins(0, 0, 0, 0)
+            map_colorbar_layout.setSpacing(10)
+            
+            map_colorbar_layout.addWidget(track_map)
+            
+            colorbar = self.create_tyre_temp_colorbar()
+            map_colorbar_layout.addWidget(colorbar)
+            
+            self.tyre_map_layout.addWidget(map_with_colorbar)
+            
+            # playback controls below map
+            controls = self.create_tyre_playback_controls()
+            self.tyre_map_layout.addWidget(controls)
+        
+        correlation = self.create_tyre_temp_correlation()
+        if correlation:
+            self.tyre_correlation_layout.addWidget(correlation)
+        
+        line_chart = self.create_tyre_temp_line_chart(selected_lap)
+        if line_chart:
+            self.tyre_chart_layout.addWidget(line_chart)
+    
+        if len(self.current_tyre_lap_data) > 0:
+            lap_start_tick = self.current_tyre_lap_data["SessionTick"].iloc[0]
+            lap_end_tick = self.current_tyre_lap_data["SessionTick"].iloc[-1]
+            total_time = (lap_end_tick - lap_start_tick) / 60
+            self.tyre_playback_time_label.setText(f"0.000s / {total_time:.3f}s")
+
+    def create_tyre_playback_controls(self):
+        controls_widget = QWidget()
+        controls_widget.setFixedHeight(50)
+        controls_layout = QHBoxLayout(controls_widget)
+        controls_layout.setContentsMargins(5, 5, 5, 5)
+        controls_layout.setSpacing(10)
+
+        self.tyre_play_pause_btn = QPushButton("▶ Play")
+        self.tyre_play_pause_btn.setFixedWidth(100)
+        self.tyre_play_pause_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                border-radius: 4px;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 5px;
+            }
+            QPushButton:hover {
+                background-color: #1d4ed8;
+            }
+        """)
+        self.tyre_play_pause_btn.clicked.connect(self.toggle_tyre_playback)
+
+        self.tyre_reset_btn = QPushButton("↺ Reset")
+        self.tyre_reset_btn.setFixedWidth(100)
+        self.tyre_reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6b7280;
+                color: white;
+                border-radius: 4px;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 5px;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+            }
+        """)
+        self.tyre_reset_btn.clicked.connect(self.reset_tyre_playback)
+
+        speed_label = QLabel("Speed:")
+        speed_label.setStyleSheet("font-size: 14px; font-weight: bold; color: black;")
+
+        self.tyre_speed_selector = QComboBox()
+        self.tyre_speed_selector.addItem("1x", 1)
+        self.tyre_speed_selector.addItem("2x", 2)
+        self.tyre_speed_selector.addItem("4x", 4)
+        self.tyre_speed_selector.addItem("8x", 8)
+        self.tyre_speed_selector.setFixedWidth(70)
+        self.tyre_speed_selector.setStyleSheet("""
+            QComboBox {
+                font-size: 14px;
+                color: black;
+                padding: 3px;
+            }
+        """)
+
+        self.tyre_playback_time_label = QLabel("0.000s / 0.000s")
+        self.tyre_playback_time_label.setStyleSheet("font-size: 14px; color: black; font-weight: bold;")
+
+        controls_layout.addWidget(self.tyre_play_pause_btn)
+        controls_layout.addWidget(self.tyre_reset_btn)
+        controls_layout.addWidget(speed_label)
+        controls_layout.addWidget(self.tyre_speed_selector)
+        controls_layout.addWidget(self.tyre_playback_time_label)
+        controls_layout.addStretch()
+
+        return controls_widget
+
+    def toggle_tyre_playback(self):
+        if not hasattr(self, 'current_tyre_lap_data') or self.current_tyre_lap_data is None:
+            return
+
+        if self.tyre_playback_active:
+            self.tyre_playback_timer.stop()
+            self.tyre_playback_active = False
+            self.tyre_play_pause_btn.setText("▶ Play")
+        else:
+            if self.tyre_playback_index >= len(self.current_tyre_lap_data) - 1:
+                self.reset_tyre_playback()
+
+            self.tyre_playback_active = True
+            self.tyre_play_pause_btn.setText("⏸ Pause")
+            self.tyre_playback_timer.start(50) 
+
+    def reset_tyre_playback(self):
+        if hasattr(self, 'tyre_playback_timer'):
+            self.tyre_playback_timer.stop()
+        
+        self.tyre_playback_active = False
+        self.tyre_play_pause_btn.setText("▶ Play")
+        self.tyre_playback_index = 0
+        self.tyre_current_tick = 0
+
+        if hasattr(self, 'current_tyre_lap_data') and self.current_tyre_lap_data is not None:
+            # Reset driver dot on map
+            if hasattr(self, 'tyre_driver_dot') and hasattr(self, 'tyre_map_canvas'):
+                self.tyre_driver_dot.set_data(
+                    [self.current_tyre_lap_data["Lon"].iloc[0]],
+                    [self.current_tyre_lap_data["Lat"].iloc[0]]
+                )
+                self.tyre_map_canvas.draw()
+
+            if hasattr(self, 'tyre_sweep_line'):
+                self.tyre_sweep_line.set_xdata([0, 0])
+                self.tyre_chart_canvas.draw_idle()
+
+            lap_start_tick = self.current_tyre_lap_data["SessionTick"].iloc[0]
+            lap_end_tick = self.current_tyre_lap_data["SessionTick"].iloc[-1]
+            total_time = (lap_end_tick - lap_start_tick) / 60
+            self.tyre_playback_time_label.setText(f"0.000s / {total_time:.3f}s")
+
+            # Update top-down with initial temps
+            self.update_tyre_top_down_live(self.current_tyre_lap_data.iloc[0])
+
+    def tyre_playback_step(self):
+        if self.current_tyre_lap_data is None:
+            return
+
+        speed = self.tyre_speed_selector.currentData()
+        
+        ticks_per_second = 60
+        tick_increment = int((0.05 * speed) * ticks_per_second)
+        
+        lap_start_tick = self.current_tyre_lap_data["SessionTick"].iloc[0]
+        lap_end_tick = self.current_tyre_lap_data["SessionTick"].iloc[-1]
+        total_lap_ticks = lap_end_tick - lap_start_tick
+
+        if not hasattr(self, 'tyre_current_tick'):
+            self.tyre_current_tick = 0
+        
+        self.tyre_current_tick += tick_increment
+
+        if self.tyre_current_tick >= total_lap_ticks:
+            self.tyre_playback_timer.stop()
+            self.tyre_playback_active = False
+            self.tyre_play_pause_btn.setText("▶ Play")
+            self.tyre_current_tick = total_lap_ticks
+            self.tyre_playback_index = len(self.current_tyre_lap_data) - 1
+            current_row = self.current_tyre_lap_data.iloc[self.tyre_playback_index]
+        else:
+            target_tick = lap_start_tick + self.tyre_current_tick
+            tick_diffs = (self.current_tyre_lap_data["SessionTick"] - target_tick).abs()
+            self.tyre_playback_index = tick_diffs.idxmin()
+            current_row = self.current_tyre_lap_data.loc[self.tyre_playback_index]
+
+        # Update driver dot position on map
+        if hasattr(self, 'tyre_driver_dot'):
+            self.tyre_driver_dot.set_data([current_row["Lon"]], [current_row["Lat"]])
+            self.tyre_map_canvas.draw_idle()
+        
+        if hasattr(self, 'tyre_sweep_line'):
+            current_time_seconds = self.tyre_current_tick / ticks_per_second
+            self.tyre_sweep_line.set_xdata([current_time_seconds, current_time_seconds])
+            self.tyre_chart_canvas.draw_idle()
+
+        #tyre temp graphic update
+        self.update_tyre_top_down_live(current_row)
+
+        # time lable update
+        current_time_seconds = self.tyre_current_tick / ticks_per_second
+        total_lap_time = total_lap_ticks / ticks_per_second
+        self.tyre_playback_time_label.setText(f"{current_time_seconds:.3f}s / {total_lap_time:.3f}s")
+
+    def update_tyre_top_down_live(self, current_row):
+        from matplotlib.patches import Rectangle
+        
+        if not hasattr(self, 'tyre_top_down_ax'):
+            return
+        
+        ax = self.tyre_top_down_ax
+        
+        while len(ax.patches) > 1:  
+            ax.patches[-1].remove()
+        
+        for text in list(ax.texts):
+            text.remove()
+        
+        tyres = {
+            'LF': {
+                'L': current_row['LFtempL'], 
+                'M': current_row['LFtempM'], 
+                'R': current_row['LFtempR'],
+                'Core': (current_row['LFtempCL'] + current_row['LFtempCM'] + current_row['LFtempCR']) / 3
+            },
+            'RF': {
+                'L': current_row['RFtempL'], 
+                'M': current_row['RFtempM'], 
+                'R': current_row['RFtempR'],
+                'Core': (current_row['RFtempCL'] + current_row['RFtempCM'] + current_row['RFtempCR']) / 3
+            },
+            'LR': {
+                'L': current_row['LRtempL'], 
+                'M': current_row['LRtempM'], 
+                'R': current_row['LRtempR'],
+                'Core': (current_row['LRtempCL'] + current_row['LRtempCM'] + current_row['LRtempCR']) / 3
+            },
+            'RR': {
+                'L': current_row['RRtempL'], 
+                'M': current_row['RRtempM'], 
+                'R': current_row['RRtempR'],
+                'Core': (current_row['RRtempCL'] + current_row['RRtempCM'] + current_row['RRtempCR']) / 3
+            },
+        }
+        
+        tyre_width = 1.5
+        tyre_height = 1.7
+        segment_width = tyre_width / 3
+        
+        tyre_positions = [
+            (0.3, 5.5, 'LF', tyres['LF']),  
+            (5.7, 5.5, 'RF', tyres['RF']),  
+            (0.3, 0.5, 'LR', tyres['LR']),  
+            (5.7, 0.5, 'RR', tyres['RR']),  
+        ]
+        
+        for x, y, label, temps in tyre_positions:
+            # Label above tyre
+            ax.text(x + tyre_width/2, y + tyre_height + 0.3, label, 
+                ha='center', va='bottom', fontsize=14, fontweight='bold', color='#000000')
+            
+            # segmentation (Outer|Middle|Centre)
+            for i, (segment_label, temp) in enumerate([('L', temps['L']), ('M', temps['M']), ('R', temps['R'])]):
+                color = self.get_tyre_temp_color(temp)
+                segment = Rectangle((x + i * segment_width, y), segment_width, tyre_height, 
+                                facecolor=color, edgecolor='#000000', linewidth=1.5)
+                ax.add_patch(segment)
+                
+                text_x = x + i * segment_width + segment_width/2
+                text_y = y + tyre_height/2
+                ax.text(text_x, text_y, f'{temp:.0f}°', 
+                    ha='center', va='center', fontsize=10, fontweight='bold', color='white')  
+            
+            #core temp (goes under tyre)
+            ax.text(x + tyre_width/2, y - 0.4, f"Core: {temps['Core']:.0f}°C", 
+                ha='center', va='top', fontsize=11, fontweight='bold', color='#111827')
+        
+        self.tyre_top_down_canvas.draw_idle()
+
+#----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     #================
     # Pedal Data Page
@@ -2651,7 +3632,7 @@ class TelemetryWindow(QWidget):
             
         windowed_brake = list(median_filter(windowed_brake_raw, size=3)) if len(windowed_brake_raw) > 3 else windowed_brake_raw
 
-        
+
         # Update pedal graph
         self.throttle_line.set_data(windowed_times, windowed_throttle)
         self.brake_line.set_data(windowed_times, windowed_brake)
