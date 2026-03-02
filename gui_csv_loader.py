@@ -209,14 +209,14 @@ class TelemetryWindow(QWidget):
         body.setLayout(body_layout)
         main_layout.addWidget(body)
 
-       # -=LEFT PANEL=-
+        # -=LEFT PANEL (SIDEBAR)=-
         left_panel = QWidget()
-        left_panel.setFixedWidth(70)
+        left_panel.setFixedWidth(220)  # Wider for shelf structure
         left_panel.setStyleSheet("background-color: #e7bdc0;")
 
         left_layout = QVBoxLayout(left_panel)
-        left_layout.setAlignment(Qt.AlignTop)
-        left_layout.setSpacing(10)
+        left_layout.setContentsMargins(0, 20, 0, 20)
+        left_layout.setSpacing(5)
 
         # -=STACKED VIEW=-
         self.stack = QStackedWidget()
@@ -225,52 +225,89 @@ class TelemetryWindow(QWidget):
         # -=PAGES=-
         self.page_overview = self.make_overview_page()
         self.page_timings = self.make_timings_page()
-        self.page_tyres = self.make_tyres_page()
         self.page_pedals = self.make_pedals_page()
+        self.page_brakes = self.make_braking_page() 
+        self.page_tyres = self.make_tyres_page()
         self.page_fuel = self.make_fuel_page()
         self.page_data = self.make_page("Data Viewer")
 
         self.stack.addWidget(self.page_overview)  # 0
         self.stack.addWidget(self.page_timings)   # 1
-        self.stack.addWidget(self.page_tyres)     # 2
-        self.stack.addWidget(self.page_pedals)    # 3
-        self.stack.addWidget(self.page_fuel)      # 4
-        self.stack.addWidget(self.page_data)      # 5
+        self.stack.addWidget(self.page_pedals)    # 2
+        self.stack.addWidget(self.page_brakes)    # 3 
+        self.stack.addWidget(self.page_tyres)     # 4
+        self.stack.addWidget(self.page_fuel)      # 5
+        self.stack.addWidget(self.page_data)      # 6
 
-        # -=BUTTONS=-
-        buttons = [
-            ("icons/icon_Overview.png", 0, "Session - Overview"),
-            ("icons/icon_Timings.png",  1, "Session - Timings"),
-            ("icons/icon_Tyre.png",     2, "Data - Tyres"),
-            ("icons/icon_Pedals.png",   3, "Data - Pedals"),
-            ("icons/icon_Fuel.png",     4, "Data - Fuel"),
-            ("icons/icon_Data.png",     5, "View Data"),
+        # -=NAVIGATION ITEMS WITH SHELF STRUCTURE=-
+        nav_items = [
+            ("Session Overview", "icons/icon_Overview.png", 0),
+            ("Timing Data", "icons/icon_Timings.png", 1),
+            ("Pedal Usage Data", "icons/icon_Pedals.png", 2),
+            ("Lock-up Data", "icons/icon_Brakes.png", 3), 
+            ("Tire Data", "icons/icon_Tyre.png", 4),
+            ("Fuel Usage Data", "icons/icon_Fuel.png", 5),
+            ("Data Previewer", "icons/icon_Data.png", 6),
         ]
 
-        for icon_path, index, tooltip_text in buttons:
+        for label, icon_path, page_index in nav_items:
+            # Container for icon + text (shelf structure)
+            item_container = QWidget()
+            item_container.setFixedHeight(60)
+            item_layout = QHBoxLayout(item_container)
+            item_layout.setContentsMargins(15, 10, 15, 10)
+            item_layout.setSpacing(8)
+            item_layout.setAlignment(Qt.AlignVCenter)
+            
+            # Icon button
             btn = QPushButton()
             btn.setIcon(QIcon(icon_path))
-            btn.setIconSize(QSize(48, 48))
-            btn.setFixedSize(48, 48)
-            btn.setToolTip(tooltip_text) 
+            btn.setIconSize(QSize(50, 50))
+            btn.setFixedSize(50, 50)
             btn.setStyleSheet("""
                 QPushButton {
-                border: none;
-                background-color: transparent;
+                    background-color: transparent;
+                    border: none;
+                    border-radius: 8px;
                 }
                 QPushButton:hover {
-                background-color: rgba(30, 41, 59, 120);
-                border-radius: 6px;
+                    background-color: #374151;
+                }
+                QPushButton:pressed {
+                    background-color: #4b5563;
                 }
             """)
-            btn.clicked.connect(lambda _, i=index: self.stack.setCurrentIndex(i))
-            left_layout.addWidget(btn)
-            ####TODO: - Add loading bar (thanks cameron)
-        
+            btn.clicked.connect(lambda checked, idx=page_index: self.stack.setCurrentIndex(idx))
+            
+            # Label text
+            text_label = QLabel(label)
+            text_label.setStyleSheet("""
+                QLabel {
+                    color: #000000;
+                    font-size: 16px;
+                    font-weight: bold;
+                }
+            """)
+            
+            item_layout.addWidget(btn)
+            item_layout.addWidget(text_label)
+            item_layout.addStretch()
+            
+            left_layout.addWidget(item_container)
+            
+   
+            if page_index < len(nav_items) - 1:
+                separator = QFrame()
+                separator.setFrameShape(QFrame.HLine)
+                separator.setStyleSheet("background-color: #2d2d2d; max-height: 1px;")
+                left_layout.addWidget(separator)
+
+        left_layout.addStretch()
+
         body_layout.addWidget(left_panel)
         body_layout.addWidget(self.stack)
 
-        # Load CSV head(ONLY 20 ROWS due to extreme dimensionality - maybe change to scrollable element)
+        # Load CSV head
         self.load_table_preview()
 
     # ===============================
@@ -3655,6 +3692,455 @@ class TelemetryWindow(QWidget):
         # Update time label
         total_lap_time = total_lap_ticks / ticks_per_second
         self.playback_time_label.setText(f"{current_time_seconds:.3f}s / {total_lap_time:.3f}s")
+
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------      
+    #================
+    # Brake Analysis Page
+    #================
+
+    def make_braking_page(self):
+        page = QWidget()
+        
+    
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+       
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(15)
+
+       
+        title = QLabel("Braking Analysis - Lockup Detection")
+        title.setStyleSheet("""
+            font-size: 38px;
+            font-weight: bold;
+            color: #000007;
+        """)
+        title.setAlignment(Qt.AlignLeft)
+        layout.addWidget(title)
+
+        
+        wheel_filter_container = QWidget()
+        wheel_filter_layout = QHBoxLayout(wheel_filter_container)
+        wheel_filter_layout.setContentsMargins(0, 0, 0, 0)
+        wheel_filter_layout.setSpacing(10)
+
+        filter_label = QLabel("Show Wheels:")
+        filter_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #111827;")
+        wheel_filter_layout.addWidget(filter_label)
+
+        self.lockup_wheel_toggles = {}
+        wheel_names = ['LF', 'RF', 'LR', 'RR']
+        
+        for wheel_name in wheel_names:
+            btn = QPushButton(wheel_name)
+            btn.setCheckable(True)
+            btn.setChecked(True)
+            btn.setFixedSize(50, 30)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #e5e7eb;
+                    color: #6b7280;
+                    border: 1px solid #d1d5db;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    font-weight: bold;
+                }
+                QPushButton:checked {
+                    background-color: #2563eb;
+                    color: white;
+                    border: 1px solid #2563eb;
+                }
+                QPushButton:hover {
+                    background-color: #d1d5db;
+                }
+                QPushButton:checked:hover {
+                    background-color: #1d4ed8;
+                }
+            """)
+            btn.clicked.connect(self.update_lockup_display)
+            self.lockup_wheel_toggles[wheel_name] = btn
+            wheel_filter_layout.addWidget(btn)
+
+        wheel_filter_layout.addStretch()
+        layout.addWidget(wheel_filter_container)
+
+        
+        content_container = QWidget()
+        content_layout = QHBoxLayout(content_container)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(15)
+
+       
+        self.lockup_map_container = QWidget()
+        self.lockup_map_layout = QVBoxLayout(self.lockup_map_container)
+        self.lockup_map_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.addWidget(self.lockup_map_container)
+
+        
+        lap_selector_container = QWidget()
+        lap_selector_container.setFixedWidth(250)  
+        lap_selector_container.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border-radius: 8px;
+                border: 1px solid #e5e7eb;
+            }
+        """)
+        lap_selector_layout = QVBoxLayout(lap_selector_container)
+        lap_selector_layout.setContentsMargins(10, 10, 10, 10)
+        lap_selector_layout.setSpacing(10)
+
+        selector_title = QLabel("Select Laps")
+        selector_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #111827;")
+        lap_selector_layout.addWidget(selector_title)
+
+      
+        self.lockup_all_laps_cb = QCheckBox("All Laps")
+        self.lockup_all_laps_cb.setChecked(True)
+        self.lockup_all_laps_cb.setStyleSheet("""
+            QCheckBox {
+                font-size: 15px;
+                color: #111827;
+                font-weight: bold;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid #9ca3af;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #2563eb;
+                border-color: #2563eb;
+            }
+        """)
+        self.lockup_all_laps_cb.stateChanged.connect(self.toggle_all_lockup_laps)
+        lap_selector_layout.addWidget(self.lockup_all_laps_cb)
+
+        
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet("background-color: #e5e7eb; max-height: 1px;")
+        lap_selector_layout.addWidget(separator)
+
+        lap_scroll = QScrollArea()
+        lap_scroll.setWidgetResizable(True)
+        lap_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        lap_scroll.setStyleSheet("border: none; background-color: white;")
+
+        lap_scroll_widget = QWidget()
+        self.lockup_lap_cb_layout = QVBoxLayout(lap_scroll_widget)
+        self.lockup_lap_cb_layout.setContentsMargins(0, 0, 0, 0)
+        self.lockup_lap_cb_layout.setSpacing(8)
+        self.lockup_lap_cb_layout.setAlignment(Qt.AlignTop)
+
+        lap_scroll.setWidget(lap_scroll_widget)
+        lap_selector_layout.addWidget(lap_scroll)
+
+        
+        content_layout.addWidget(lap_selector_container)
+        content_layout.addWidget(self.lockup_map_container)
+
+        layout.addWidget(content_container)
+
+    
+        self.lockup_stats_container = QWidget()
+        self.lockup_stats_layout = QVBoxLayout(self.lockup_stats_container)
+        self.lockup_stats_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.lockup_stats_container)
+
+        layout.addStretch()
+
+        scroll.setWidget(content_widget)
+        
+        page_layout = QVBoxLayout(page)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        page_layout.addWidget(scroll)
+
+        self.lockup_lap_checkboxes = {}
+        self.detect_all_lockups()
+        self.populate_lockup_lap_selector()
+        self.update_lockup_display()
+
+        return page
+
+    def detect_all_lockups(self):
+        """Detect all lockups across all laps"""
+        MIN_WHEEL_SPEED = 2  
+        MIN_GPS_SPEED = 10  
+        
+        self.all_lockups = {
+            'LF': [],
+            'RF': [],
+            'LR': [],
+            'RR': []
+        }
+        
+      
+        for idx, row in self.telemetry_df.iterrows():
+            gps_speed = row['Speed']
+            
+         
+            if gps_speed < MIN_GPS_SPEED:
+                continue
+            
+        
+            wheels = {
+                'LF': row.get('LFspeed', gps_speed),
+                'RF': row.get('RFspeed', gps_speed),
+                'LR': row.get('LRspeed', gps_speed),
+                'RR': row.get('RRspeed', gps_speed)
+            }
+            
+            for wheel_name, wheel_speed in wheels.items():
+           
+                if wheel_speed < MIN_WHEEL_SPEED:
+                    self.all_lockups[wheel_name].append({
+                        'lap': row['Lap'],
+                        'lon': row['Lon'],
+                        'lat': row['Lat'],
+                        'speed': gps_speed,
+                        'wheel_speed': wheel_speed
+                    })
+
+    def populate_lockup_lap_selector(self):
+    
+        while self.lockup_lap_cb_layout.count():
+            child = self.lockup_lap_cb_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        self.lockup_lap_checkboxes = {}
+        
+     
+        for lap in sorted(self.lap_timings.keys()):
+
+            has_lockup = any(
+                any(l['lap'] == lap for l in lockups) 
+                for lockups in self.all_lockups.values()
+            )
+            
+       
+            cb_text = f"Lap {lap}"
+            if has_lockup:
+                cb_text += " ⚠️"  
+            
+            cb = QCheckBox(cb_text)
+            cb.setChecked(True)
+            cb.setStyleSheet("""
+                QCheckBox {
+                    font-size: 15px;
+                    font-weight: bold;
+                    color: #374151;
+                }
+                QCheckBox::indicator {
+                    width: 18px;
+                    height: 18px;
+                    border: 2px solid #9ca3af;
+                    border-radius: 3px;
+                    background-color: white;
+                }
+                QCheckBox::indicator:checked {
+                    background-color: #2563eb;
+                    border-color: #2563eb;
+                    image: url(none);
+                }
+                QCheckBox::indicator:checked:after {
+                    content: "✓";
+                    color: white;
+                }
+            """)
+            cb.stateChanged.connect(self.update_lockup_display)
+            
+            self.lockup_lap_checkboxes[lap] = cb
+            self.lockup_lap_cb_layout.addWidget(cb)
+
+    def toggle_all_lockup_laps(self, state):
+        """Toggle all lap checkboxes"""
+        is_checked = (state == Qt.Checked)
+        
+        for cb in self.lockup_lap_checkboxes.values():
+            cb.setChecked(is_checked)
+
+    def update_lockup_display(self):
+        """Update the track map and statistics based on selected laps"""
+       
+        selected_laps = [lap for lap, cb in self.lockup_lap_checkboxes.items() if cb.isChecked()]
+        
+        if not selected_laps:
+            selected_laps = list(self.lap_timings.keys())
+        
+        while self.lockup_map_layout.count():
+            child = self.lockup_map_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        while self.lockup_stats_layout.count():
+            child = self.lockup_stats_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        map_widget = self.create_lockup_track_map(selected_laps)
+        if map_widget:
+            self.lockup_map_layout.addWidget(map_widget)
+        
+        stats_widget = self.create_lockup_stats(selected_laps)
+        if stats_widget:
+            self.lockup_stats_layout.addWidget(stats_widget)
+
+    def create_lockup_track_map(self, selected_laps):
+        """Create track map with lockup markers"""
+        from matplotlib.figure import Figure
+        import numpy as np
+        
+
+        first_lap = sorted(self.lap_timings.keys())[0]
+        lap_data = self.telemetry_df[self.telemetry_df["Lap"] == first_lap].copy()
+        
+        if len(lap_data) == 0:
+            return None
+        
+        lap_data = lap_data.sort_values("SessionTick")
+        
+        fig = Figure(figsize=(12, 10), facecolor='#f8f9fa')
+        ax = fig.add_subplot(111)
+        
+        self.lockup_map_ax = ax
+        
+        ax.plot(lap_data["Lon"], lap_data["Lat"], 
+            linewidth=8, color='#d1d5db', zorder=1, alpha=0.8)
+        
+        start_lon = lap_data["Lon"].iloc[0]
+        start_lat = lap_data["Lat"].iloc[0]
+        second_lon = lap_data["Lon"].iloc[1]
+        second_lat = lap_data["Lat"].iloc[1]
+        
+        dx = second_lon - start_lon
+        dy = second_lat - start_lat
+        perp_dx, perp_dy = -dy, dx
+        length = np.sqrt(perp_dx**2 + perp_dy**2)
+        if length > 0:
+            perp_dx = perp_dx / length * 0.0003
+            perp_dy = perp_dy / length * 0.0003
+        
+        ax.plot([start_lon - perp_dx, start_lon + perp_dx],
+                [start_lat - perp_dy, start_lat + perp_dy],
+                color='black', linewidth=4, zorder=10)
+        
+        selected_wheels = self.get_selected_lockup_wheels()
+        
+        all_lons = []
+        all_lats = []
+        
+        for wheel_name in selected_wheels:
+            lockups = self.all_lockups[wheel_name]
+            wheel_lockups = [l for l in lockups if l['lap'] in selected_laps]
+            
+            if wheel_lockups:
+                all_lons.extend([l['lon'] for l in wheel_lockups])
+                all_lats.extend([l['lat'] for l in wheel_lockups])
+        
+        if all_lons:
+            ax.scatter(all_lons, all_lats, 
+                    color='#ef4444', 
+                    s=40,
+                    alpha=0.6,
+                    zorder=5,
+                    label='Lockups')
+            ax.legend(loc='upper right', fontsize=11, framealpha=0.9)
+        
+        ax.set_title('Lockup Locations', fontsize=16, fontweight='bold', pad=10)
+        ax.set_aspect('equal')
+        ax.set_facecolor('white')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlim(lap_data["Lon"].min() - 0.0005, lap_data["Lon"].max() + 0.0005)
+        ax.set_ylim(lap_data["Lat"].min() - 0.0005, lap_data["Lat"].max() + 0.0005)
+        
+        fig.subplots_adjust(left=0.02, right=0.98, top=0.95, bottom=0.02)
+        
+        canvas = FigureCanvas(fig)
+        canvas.setFixedSize(900, 700)
+        
+        self.lockup_map_canvas = canvas
+        
+        return canvas
+
+    def get_selected_lockup_wheels(self):
+        if not hasattr(self, 'lockup_wheel_toggles'):
+            return ['LF', 'RF', 'LR', 'RR']  
+        
+        selected = []
+        for wheel_name, toggle in self.lockup_wheel_toggles.items():
+            if toggle.isChecked():
+                selected.append(wheel_name)
+        
+        return selected if selected else ['LF', 'RF', 'LR', 'RR']
+    
+    def create_lockup_stats(self, selected_laps):
+        total_lockups = 0
+        wheel_counts = {'LF': 0, 'RF': 0, 'LR': 0, 'RR': 0}
+        
+        for wheel_name, lockups in self.all_lockups.items():
+            count = sum(1 for l in lockups if l['lap'] in selected_laps)
+            wheel_counts[wheel_name] = count
+            total_lockups += count
+        
+        avg_per_lap = total_lockups / len(selected_laps) if selected_laps else 0
+        
+        stats_container = QWidget()
+        stats_container.setFixedHeight(100)
+        stats_container.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border-radius: 8px;
+                border: 1px solid #e5e7eb;
+            }
+        """)
+        
+        stats_layout = QHBoxLayout(stats_container)
+        stats_layout.setContentsMargins(20, 10, 20, 10)
+        stats_layout.setSpacing(30)
+
+        total_widget = self.create_stat_box("Total Lockups", f"{total_lockups}")
+        stats_layout.addWidget(total_widget)
+
+        avg_widget = self.create_stat_box("Avg per Lap", f"{avg_per_lap:.1f}")
+        stats_layout.addWidget(avg_widget)
+
+        for wheel_name, count in wheel_counts.items():
+            wheel_widget = self.create_stat_box(f"{wheel_name} Lockups", f"{count}")
+            stats_layout.addWidget(wheel_widget)
+        
+        stats_layout.addStretch()
+        
+        return stats_container
+
+
+    def create_stat_box(self, label, value):
+        """Helper to create a stat box"""
+        stat_widget = QWidget()
+        stat_layout = QVBoxLayout(stat_widget)
+        stat_layout.setContentsMargins(0, 0, 0, 0)
+        stat_layout.setSpacing(5)
+            
+        label_widget = QLabel(label)
+        label_widget.setStyleSheet("font-size: 12px; color: #6b7280; font-weight: 500;")
+            
+        value_widget = QLabel(value)
+        value_widget.setStyleSheet("font-size: 24px; color: #111827; font-weight: bold;")
+            
+        stat_layout.addWidget(label_widget)
+        stat_layout.addWidget(value_widget)
+            
+        return stat_widget
+
+
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------      
 
