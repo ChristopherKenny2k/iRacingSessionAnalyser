@@ -48,7 +48,6 @@ from csv_cleaner import clean_csv
 
 
 class ZoomableCanvas(FigureCanvas):
-    """FigureCanvas with scroll wheel zoom and click-drag pan support"""
     def __init__(self, fig):
         super().__init__(fig)
         self._pressing = False
@@ -132,6 +131,22 @@ class ZoomableCanvas(FigureCanvas):
 class TelemetryWindow(QWidget):
     def __init__(self, session_info, telemetry_df, session_type):
         super().__init__()
+
+        #screen size
+        screen = QApplication.primaryScreen()
+        screen_geometry = screen.geometry()
+        screen_width = screen_geometry.width()
+        
+        if screen_width <= 1920:
+            self.scale_factor = 0.7  
+        elif screen_width <= 2560:
+            self.scale_factor = 0.85  
+        else:
+            self.scale_factor = 1.0  
+        
+        print(f"Screen width: {screen_width}px, Scale factor: {self.scale_factor}")
+        
+
         self.session_info = session_info
         self.telemetry_df = telemetry_df
         self.session_type = session_type
@@ -211,7 +226,7 @@ class TelemetryWindow(QWidget):
 
         # -=LEFT PANEL (SIDEBAR)=-
         left_panel = QWidget()
-        left_panel.setFixedWidth(220)  # Wider for shelf structure
+        left_panel.setFixedWidth(int(220 * self.scale_factor))
         left_panel.setStyleSheet("background-color: #e7bdc0;")
 
         left_layout = QVBoxLayout(left_panel)
@@ -339,7 +354,6 @@ class TelemetryWindow(QWidget):
     # PLOT TRACK MAP
     #==========
     def make_track_map_widget(self, venue):
-        """Create a track map visualization from GPS data"""
         from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
         from matplotlib.figure import Figure
         import numpy as np
@@ -829,7 +843,7 @@ class TelemetryWindow(QWidget):
         self.timing_table = self.create_timing_table()
         table_layout.addWidget(self.timing_table)
 
-        table_container.setFixedWidth(700)
+        table_container.setFixedWidth(int(700 * self.scale_factor))
         content_layout.addWidget(table_container)
 
         # Track Map
@@ -907,9 +921,9 @@ class TelemetryWindow(QWidget):
             layout.addWidget(lap_chart)
 
         return page
-
+    
+    #TODO sectors not adding up properly
     def calculate_lap_timings(self):
-        """Calculate all lap timing data including sectors"""
         self.lap_timings = {}
         
         valid_laps = sorted(self.telemetry_df[self.telemetry_df["Lap"] > 0]["Lap"].unique())
@@ -1045,7 +1059,6 @@ class TelemetryWindow(QWidget):
                     self.lap_timings[lap]['delta_str'] = f"{delta:.3f}s"
 
     def create_map_legend(self, items, title):
-        """Create a discrete legend widget"""
         legend_widget = QWidget()
         legend_widget.setFixedWidth(150)
         legend_widget.setStyleSheet("""
@@ -1157,8 +1170,8 @@ class TelemetryWindow(QWidget):
 
         # Colourbar figure TODO: ENSURE WIDE ENOUGH FIG's ARE VISIBLE (esp 3digit)
         colourbar_widget = QWidget()
-        colourbar_widget.setFixedWidth(180)
-        colourbar_widget.setFixedHeight(300)
+        colourbar_widget.setFixedWidth(int(180 * self.scale_factor))
+        colourbar_widget.setFixedHeight(int(300 * self.scale_factor))
         
         fig = Figure(figsize=(2.5, 4), facecolor='#f8f9fa')
         ax = fig.add_subplot(111)
@@ -1180,7 +1193,7 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.30, right=0.95, top=0.98, bottom=0.02)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(180, 300)
+        canvas.setFixedSize(int(180 * self.scale_factor), int(300 * self.scale_factor))
         
         layout = QVBoxLayout(colourbar_widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1191,9 +1204,8 @@ class TelemetryWindow(QWidget):
         return colourbar_container
 
     def create_session_stats_bar(self):
-        """Create the session statistics bar"""
         stats_bar = QWidget()
-        stats_bar.setFixedHeight(120)
+        stats_bar.setFixedHeight(int(120 * self.scale_factor))
         stats_bar.setStyleSheet("""
             QWidget {
                 background-color: #f8f9fa;
@@ -1291,7 +1303,6 @@ class TelemetryWindow(QWidget):
         return stats_bar
 
     def create_stat_widget(self, label, value):
-        """Helper to create a stat display widget"""
         widget = QWidget()
         widget_layout = QVBoxLayout(widget)
         widget_layout.setSpacing(3)
@@ -1310,7 +1321,6 @@ class TelemetryWindow(QWidget):
     
     # CONSITENCY SCORE MATRIX FUNCTION (potential tweaking necessary in case of unrealistic goals/expectations potential add an SS+ grade r sth)
     def calculate_consistency_grade(self, std_dev, valid_percentage):
-        """Calculate consistency grade based on std dev and valid lap percentage"""
         # Lap time consistency score
         if std_dev < 0.1:
             time_score = 100
@@ -1372,7 +1382,6 @@ class TelemetryWindow(QWidget):
         return grade, color
 
     def create_timing_table(self):
-        """Create the lap timing table with sortable columns"""
         table = QTableWidget()
         
         # Set up table
@@ -1423,8 +1432,8 @@ class TelemetryWindow(QWidget):
         table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
 
-        table.setColumnWidth(0, 60)
-        table.setColumnWidth(6, 60)
+        table.setColumnWidth(0, int(60 * self.scale_factor))
+        table.setColumnWidth(6, int(60 * self.scale_factor))
 
         table.verticalHeader().setVisible(False)
         table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -1492,7 +1501,6 @@ class TelemetryWindow(QWidget):
     
 
     def on_timing_table_selection_changed(self):
-        """Update the timing map when a lap is selected in the table"""
         selected_items = self.timing_table.selectedItems()
         if not selected_items:
             return
@@ -1506,7 +1514,6 @@ class TelemetryWindow(QWidget):
         self.draw_timing_map_for_lap(selected_lap)
     
     def toggle_timing_map_mode(self, mode):
-        """Toggle between delta and speed map modes"""
         if mode == "delta":
             self.timing_map_delta.setChecked(True)
             self.timing_map_speed.setChecked(False)
@@ -1517,7 +1524,6 @@ class TelemetryWindow(QWidget):
         self.draw_timing_map()
 
     def toggle_speed_map_unit(self, unit):
-        """Toggle between km/h and mph for speed map"""
         if unit == "kmh":
             self.speed_map_unit_kmh.setChecked(True)
             self.speed_map_unit_mph.setChecked(False)
@@ -1686,7 +1692,7 @@ class TelemetryWindow(QWidget):
 
         # Create canvas
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(650, 650)
+        canvas.setFixedSize(int(650 * self.scale_factor), int(650 * self.scale_factor))
 
         # Create horizontal layout for map + legend
         map_legend_container = QWidget()
@@ -1709,13 +1715,12 @@ class TelemetryWindow(QWidget):
         self.timing_map_layout.addWidget(map_legend_container)
 
     def draw_timing_map_for_lap(self, lap):
-        """Wrapper method to draw map for a specific lap"""
         self.draw_timing_map(selected_lap=lap)
 
     def create_map_legend(self, items, title):
-        """Create a discrete legend widget"""
+
         legend_widget = QWidget()
-        legend_widget.setFixedWidth(150)
+        legend_widget.setFixedWidth(int(150 * self.scale_factor))
         legend_widget.setStyleSheet("""
             QWidget {
                 background-color: #f8f9fa;
@@ -1757,7 +1762,6 @@ class TelemetryWindow(QWidget):
         return legend_widget
     
     def create_lap_time_chart(self):
-        """Create a line chart showing lap time progression"""
         from matplotlib.figure import Figure
         import matplotlib.pyplot as plt
         from matplotlib.ticker import FuncFormatter
@@ -1829,7 +1833,7 @@ class TelemetryWindow(QWidget):
         
      
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(300)
+        canvas.setFixedHeight(int(300 * self.scale_factor))
         
         # hover tooltip with lap info
         def on_hover(event):
@@ -1999,7 +2003,6 @@ class TelemetryWindow(QWidget):
             return '#ef4444'
 
     def interpolate_color(self, color1, color2, ratio):
-        """Interpolate between two hex colors"""
         c1 = [int(color1[i:i+2], 16) for i in (1, 3, 5)]
         c2 = [int(color2[i:i+2], 16) for i in (1, 3, 5)]
         
@@ -2024,25 +2027,21 @@ class TelemetryWindow(QWidget):
                 'L': lap_data['LFtempL'].mean(), 
                 'M': lap_data['LFtempM'].mean(), 
                 'R': lap_data['LFtempR'].mean(),
-                'Core': (lap_data['LFtempCL'].mean() + lap_data['LFtempCM'].mean() + lap_data['LFtempCR'].mean()) / 3
             },
             'RF': {
                 'L': lap_data['RFtempL'].mean(), 
                 'M': lap_data['RFtempM'].mean(), 
                 'R': lap_data['RFtempR'].mean(),
-                'Core': (lap_data['RFtempCL'].mean() + lap_data['RFtempCM'].mean() + lap_data['RFtempCR'].mean()) / 3
             },
             'LR': {
                 'L': lap_data['LRtempL'].mean(), 
                 'M': lap_data['LRtempM'].mean(), 
                 'R': lap_data['LRtempR'].mean(),
-                'Core': (lap_data['LRtempCL'].mean() + lap_data['LRtempCM'].mean() + lap_data['LRtempCR'].mean()) / 3
             },
             'RR': {
                 'L': lap_data['RRtempL'].mean(), 
                 'M': lap_data['RRtempM'].mean(), 
                 'R': lap_data['RRtempR'].mean(),
-                'Core': (lap_data['RRtempCL'].mean() + lap_data['RRtempCM'].mean() + lap_data['RRtempCR'].mean()) / 3
             },
         }
                 
@@ -2085,9 +2084,6 @@ class TelemetryWindow(QWidget):
                 text_y = y + tyre_height/2
                 ax.text(text_x, text_y, f'{temp:.0f}°', 
                     ha='center', va='center', fontsize=10, fontweight='bold', color='white')
-            
-            ax.text(x + tyre_width/2, y - 0.4, f"Core: {temps['Core']:.0f}°C", 
-               ha='center', va='top', fontsize=11, fontweight='bold', color='#111827')
         
         ax.set_xlim(0, 8)
         ax.set_ylim(0, 8)
@@ -2099,7 +2095,7 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.05, right=0.95, top=0.92, bottom=0.05)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(700, 600)
+        canvas.setFixedSize(int(700 * self.scale_factor), int(600 * self.scale_factor))
         
         self.tyre_top_down_canvas = canvas
         
@@ -2175,7 +2171,8 @@ class TelemetryWindow(QWidget):
         self.tyre_map_ax = ax
 
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(600, 600)
+        canvas.setFixedSize(int(600 * self.scale_factor), int(600 * self.scale_factor))
+
 
         self.tyre_map_canvas = canvas
 
@@ -2227,7 +2224,8 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.5, right=0.85, top=0.98, bottom=0.02)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(120, 600)
+        canvas.setFixedSize(int(120 * self.scale_factor), int(600 * self.scale_factor))
+
         
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
@@ -2313,7 +2311,7 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.10, right=0.98, top=0.90, bottom=0.15)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(300)
+        canvas.setFixedHeight(int(300 * self.scale_factor))
         return canvas
     
     #Avg tyre temp through lap line chart
@@ -2368,7 +2366,7 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.08, right=0.98, top=0.88, bottom=0.15)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(300)
+        canvas.setFixedHeight(int(300 * self.scale_factor))
         
         self.tyre_chart_canvas = canvas
         
@@ -2635,28 +2633,24 @@ class TelemetryWindow(QWidget):
                 'L': current_row['LFtempL'], 
                 'M': current_row['LFtempM'], 
                 'R': current_row['LFtempR'],
-                'Core': (current_row['LFtempCL'] + current_row['LFtempCM'] + current_row['LFtempCR']) / 3
             },
             'RF': {
                 'L': current_row['RFtempL'], 
                 'M': current_row['RFtempM'], 
                 'R': current_row['RFtempR'],
-                'Core': (current_row['RFtempCL'] + current_row['RFtempCM'] + current_row['RFtempCR']) / 3
             },
             'LR': {
                 'L': current_row['LRtempL'], 
                 'M': current_row['LRtempM'], 
                 'R': current_row['LRtempR'],
-                'Core': (current_row['LRtempCL'] + current_row['LRtempCM'] + current_row['LRtempCR']) / 3
             },
             'RR': {
                 'L': current_row['RRtempL'], 
                 'M': current_row['RRtempM'], 
                 'R': current_row['RRtempR'],
-                'Core': (current_row['RRtempCL'] + current_row['RRtempCM'] + current_row['RRtempCR']) / 3
             },
         }
-        
+
         tyre_width = 1.5
         tyre_height = 1.7
         segment_width = tyre_width / 3
@@ -2684,10 +2678,7 @@ class TelemetryWindow(QWidget):
                 text_y = y + tyre_height/2
                 ax.text(text_x, text_y, f'{temp:.0f}°', 
                     ha='center', va='center', fontsize=10, fontweight='bold', color='white')  
-            
-            #core temp (goes under tyre)
-            ax.text(x + tyre_width/2, y - 0.4, f"Core: {temps['Core']:.0f}°C", 
-                ha='center', va='top', fontsize=11, fontweight='bold', color='#111827')
+
         
         self.tyre_top_down_canvas.draw_idle()
 #TODO: for tyre page, add overall data such as highest recorded temp for each tyre, per lap highest temp, highest averages etc etc 
@@ -2861,8 +2852,8 @@ class TelemetryWindow(QWidget):
 
         # Speed display box
         self.speed_display_widget = QWidget()
-        self.speed_display_widget.setFixedHeight(100)
-        self.speed_display_widget.setFixedWidth(150)
+        self.speed_display_widget.setFixedHeight(int(100 * self.scale_factor))
+        self.speed_display_widget.setFixedWidth(int(150 * self.scale_factor))
         self.speed_display_widget.setStyleSheet("""
             QWidget {
                 background-color: #f8f9fa;
@@ -3083,7 +3074,6 @@ class TelemetryWindow(QWidget):
         return page
 
     def toggle_speed_unit(self, unit):
-        """Toggle between km/h and mph"""
         if unit == "kmh":
             self.speed_unit_kmh.setChecked(True)
             self.speed_unit_mph.setChecked(False)
@@ -3092,7 +3082,6 @@ class TelemetryWindow(QWidget):
             self.speed_unit_mph.setChecked(True)
 
     def toggle_map_mode(self, mode):
-        """Toggle between throttle/brake and gear map view"""
         if mode == "throttle":
             self.map_mode_throttle.setChecked(True)
             self.map_mode_gear.setChecked(False)
@@ -3304,12 +3293,13 @@ class TelemetryWindow(QWidget):
 
 
         self.map_canvas = ZoomableCanvas(fig_map)
-        self.map_canvas.setFixedSize(800, 650)
+        self.map_canvas.setFixedSize(int(800 * self.scale_factor), int(650 * self.scale_factor))
+
         self.map_ax = ax_map
 
         # ===== MAP LEGEND =====
         legend_widget = QWidget()
-        legend_widget.setFixedWidth(150)
+        legend_widget.setFixedWidth(int(150 * self.scale_factor))
         legend_widget.setStyleSheet("""
             QWidget {
                 background-color: #f8f9fa;
@@ -3431,7 +3421,7 @@ class TelemetryWindow(QWidget):
         fig_pedal.subplots_adjust(left=0.08, right=0.98, top=0.90, bottom=0.25)
 
         self.pedal_canvas = FigureCanvas(fig_pedal)
-        self.pedal_canvas.setFixedSize(800, 250)
+        self.pedal_canvas.setFixedSize(int(800 * self.scale_factor), int(250 * self.scale_factor))
         self.pedal_graph_layout.addWidget(self.pedal_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
 
         self.playback_time_data = []
@@ -3472,7 +3462,7 @@ class TelemetryWindow(QWidget):
         fig_gear.subplots_adjust(left=0.08, right=0.98, top=0.90, bottom=0.15)
 
         self.gear_canvas = FigureCanvas(fig_gear)
-        self.gear_canvas.setFixedSize(800, 180)
+        self.gear_canvas.setFixedSize(int(800 * self.scale_factor), int(180 * self.scale_factor))
         self.gear_graph_layout.addWidget(self.gear_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
 
         self.playback_gear_data = []
@@ -3782,7 +3772,7 @@ class TelemetryWindow(QWidget):
 
         
         lap_selector_container = QWidget()
-        lap_selector_container.setFixedWidth(250)  
+        lap_selector_container.setFixedWidth(int(250 * self.scale_factor)) 
         lap_selector_container.setStyleSheet("""
             QWidget {
                 background-color: white;
@@ -3870,9 +3860,9 @@ class TelemetryWindow(QWidget):
         return page
 
     def detect_all_lockups(self):
-        """Detect all lockups across all laps"""
         MIN_WHEEL_SPEED = 2  
         MIN_GPS_SPEED = 10  
+        GAP_THRESHOLD = 5  
         
         self.all_lockups = {
             'LF': [],
@@ -3881,15 +3871,23 @@ class TelemetryWindow(QWidget):
             'RR': []
         }
         
-      
+        # Temporary storage for raw lockup points
+        raw_lockups = {
+            'LF': [],
+            'RF': [],
+            'LR': [],
+            'RR': []
+        }
+        
+        # Process all data - collect raw lockup points
         for idx, row in self.telemetry_df.iterrows():
             gps_speed = row['Speed']
             
-         
+            # Car must be moving
             if gps_speed < MIN_GPS_SPEED:
                 continue
             
-        
+            # Check each wheel
             wheels = {
                 'LF': row.get('LFspeed', gps_speed),
                 'RF': row.get('RFspeed', gps_speed),
@@ -3898,15 +3896,45 @@ class TelemetryWindow(QWidget):
             }
             
             for wheel_name, wheel_speed in wheels.items():
-           
+                # Lockup = wheel essentially stopped but car still moving
                 if wheel_speed < MIN_WHEEL_SPEED:
-                    self.all_lockups[wheel_name].append({
+                    raw_lockups[wheel_name].append({
                         'lap': row['Lap'],
                         'lon': row['Lon'],
                         'lat': row['Lat'],
                         'speed': gps_speed,
-                        'wheel_speed': wheel_speed
+                        'wheel_speed': wheel_speed,
+                        'tick': row['SessionTick']
                     })
+        
+        # Group consecutive points into single lockup events
+        for wheel_name, points in raw_lockups.items():
+            if not points:
+                continue
+            
+            # Sort by tick
+            points = sorted(points, key=lambda x: x['tick'])
+            
+            # Group consecutive points
+            current_event = [points[0]]
+            
+            for i in range(1, len(points)):
+                tick_gap = points[i]['tick'] - points[i-1]['tick']
+                
+                if tick_gap <= GAP_THRESHOLD:
+                    # Same lockup event - add to current
+                    current_event.append(points[i])
+                else:
+                    # New lockup event - save previous and start new
+                    # Use middle point of the event as representative
+                    mid_idx = len(current_event) // 2
+                    self.all_lockups[wheel_name].append(current_event[mid_idx])
+                    current_event = [points[i]]
+            
+            # Don't forget the last event
+            if current_event:
+                mid_idx = len(current_event) // 2
+                self.all_lockups[wheel_name].append(current_event[mid_idx])
 
     def populate_lockup_lap_selector(self):
     
@@ -3961,14 +3989,12 @@ class TelemetryWindow(QWidget):
             self.lockup_lap_cb_layout.addWidget(cb)
 
     def toggle_all_lockup_laps(self, state):
-        """Toggle all lap checkboxes"""
         is_checked = (state == Qt.Checked)
         
         for cb in self.lockup_lap_checkboxes.values():
             cb.setChecked(is_checked)
 
     def update_lockup_display(self):
-        """Update the track map and statistics based on selected laps"""
        
         selected_laps = [lap for lap, cb in self.lockup_lap_checkboxes.items() if cb.isChecked()]
         
@@ -3994,7 +4020,6 @@ class TelemetryWindow(QWidget):
             self.lockup_stats_layout.addWidget(stats_widget)
 
     def create_lockup_track_map(self, selected_laps):
-        """Create track map with lockup markers"""
         from matplotlib.figure import Figure
         import numpy as np
         
@@ -4048,8 +4073,8 @@ class TelemetryWindow(QWidget):
         if all_lons:
             ax.scatter(all_lons, all_lats, 
                     color='#ef4444', 
-                    s=40,
-                    alpha=0.6,
+                    s=80,
+                    alpha=0.4,
                     zorder=5,
                     label='Lockups')
             ax.legend(loc='upper right', fontsize=11, framealpha=0.9)
@@ -4065,7 +4090,8 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.02, right=0.98, top=0.95, bottom=0.02)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(900, 700)
+        canvas.setFixedSize(int(900 * self.scale_factor), int(700 * self.scale_factor))
+
         
         self.lockup_map_canvas = canvas
         
@@ -4094,7 +4120,7 @@ class TelemetryWindow(QWidget):
         avg_per_lap = total_lockups / len(selected_laps) if selected_laps else 0
         
         stats_container = QWidget()
-        stats_container.setFixedHeight(100)
+        stats_container.setFixedHeight(int(100 * self.scale_factor))
         stats_container.setStyleSheet("""
             QWidget {
                 background-color: white;
@@ -4123,7 +4149,6 @@ class TelemetryWindow(QWidget):
 
 
     def create_stat_box(self, label, value):
-        """Helper to create a stat box"""
         stat_widget = QWidget()
         stat_layout = QVBoxLayout(stat_widget)
         stat_layout.setContentsMargins(0, 0, 0, 0)
@@ -4299,7 +4324,7 @@ class TelemetryWindow(QWidget):
         least_used_kg = least_used_l * FUEL_DENSITY
         
         stats_container = QWidget()
-        stats_container.setFixedHeight(80)
+        stats_container.setFixedHeight(int(80 * self.scale_factor))
         stats_container.setStyleSheet("""
             QWidget {
                 background-color: white;
@@ -4342,7 +4367,6 @@ class TelemetryWindow(QWidget):
         return stats_container
 
     def toggle_fuel_chart(self, mode):
-        """Toggle between line and bar chart"""
         if mode == "line":
             self.fuel_line_btn.setChecked(True)
             self.fuel_bar_btn.setChecked(False)
@@ -4355,7 +4379,6 @@ class TelemetryWindow(QWidget):
         self.update_fuel_displays()
 
     def update_fuel_displays(self):
-        """Update all fuel visualizations"""
         while self.fuel_chart_container_layout.count():
             child = self.fuel_chart_container_layout.takeAt(0)
             if child.widget():
@@ -4435,7 +4458,7 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.10, right=0.98, top=0.92, bottom=0.12)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(400)
+        canvas.setFixedHeight(int(400 * self.scale_factor))
         return canvas
 
     def create_fuel_usage_bar_chart(self):
@@ -4507,7 +4530,7 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.10, right=0.98, top=0.92, bottom=0.12)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(400)
+        canvas.setFixedHeight(int(400 * self.scale_factor))
         
         canvas.mpl_connect('motion_notify_event', self.on_fuel_bar_hover)
         canvas.mpl_connect('button_press_event', self.on_fuel_bar_click)
@@ -4515,9 +4538,9 @@ class TelemetryWindow(QWidget):
         self.fuel_bar_canvas = canvas
         
         return canvas
-
+    
+    #ligthen colour of bar when hovered for lap selection
     def on_fuel_bar_hover(self, event):
-        """Brighten bar on hover"""
         if not hasattr(self, 'fuel_bars') or event.inaxes != self.fuel_bar_ax:
             return
         
@@ -4536,8 +4559,8 @@ class TelemetryWindow(QWidget):
         
         self.fuel_bar_canvas.draw_idle()
 
+    #update track map on lap click selection
     def on_fuel_bar_click(self, event):
-        """Select lap on click"""
         if not hasattr(self, 'fuel_bars') or event.inaxes != self.fuel_bar_ax:
             return
         
@@ -4634,7 +4657,7 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.10, right=0.98, top=0.90, bottom=0.15)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(300)
+        canvas.setFixedHeight(int(300 * self.scale_factor))
         return canvas
 
     def create_fuel_track_map(self, lap):
@@ -4721,7 +4744,8 @@ class TelemetryWindow(QWidget):
             fontsize=12, fontweight='bold', color='#111827')
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(600, 600)
+        canvas.setFixedSize(int(600 * self.scale_factor), int(600 * self.scale_factor))
+
         return canvas
 
 # ----------------------
