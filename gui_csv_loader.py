@@ -226,7 +226,7 @@ class TelemetryWindow(QWidget):
 
         # -=LEFT PANEL (SIDEBAR)=-
         left_panel = QWidget()
-        left_panel.setFixedWidth(int(220 * self.scale_factor))
+        left_panel.setFixedWidth(int(320 * self.scale_factor))
         left_panel.setStyleSheet("background-color: #e7bdc0;")
 
         left_layout = QVBoxLayout(left_panel)
@@ -843,17 +843,18 @@ class TelemetryWindow(QWidget):
         self.timing_table = self.create_timing_table()
         table_layout.addWidget(self.timing_table)
 
-        table_container.setFixedWidth(int(700 * self.scale_factor))
+        table_container.setFixedWidth(int(850 * self.scale_factor))
         content_layout.addWidget(table_container)
 
         # Track Map
         map_container = QWidget()
         map_layout = QVBoxLayout(map_container)
         map_layout.setContentsMargins(0, 0, 0, 0)
-        map_layout.setSpacing(5)
+        map_layout.setSpacing(2)
 
         # Map toggle
         map_toggle_layout = QHBoxLayout()
+        map_toggle_layout.setContentsMargins(0, int(25 * self.scale_factor), 0, 0)  # Add top margin
         map_toggle_layout.addStretch()
 
         map_toggle_label = QLabel("Map Mode:")
@@ -910,15 +911,17 @@ class TelemetryWindow(QWidget):
         content_layout.addStretch()
 
         layout.addLayout(content_layout)
-        layout.addStretch()
+
 
         
         self.draw_timing_map()
 
-        # ADD THIS - Lap time chart
+       
         lap_chart = self.create_lap_time_chart()
         if lap_chart:
             layout.addWidget(lap_chart)
+
+        layout.addStretch() 
 
         return page
     
@@ -1116,10 +1119,10 @@ class TelemetryWindow(QWidget):
             unit_label = 'km/h'
 
         colourbar_container = QWidget()
-        colourbar_container.setFixedWidth(200)
+        colourbar_container.setFixedWidth(225)
         
         container_layout = QVBoxLayout(colourbar_container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setContentsMargins(0, 4, 0, 0)
         container_layout.setSpacing(5)
         
         # mph kph toggler
@@ -1170,10 +1173,10 @@ class TelemetryWindow(QWidget):
 
         # Colourbar figure TODO: ENSURE WIDE ENOUGH FIG's ARE VISIBLE (esp 3digit)
         colourbar_widget = QWidget()
-        colourbar_widget.setFixedWidth(int(180 * self.scale_factor))
-        colourbar_widget.setFixedHeight(int(300 * self.scale_factor))
+        colourbar_widget.setFixedWidth(int(300 * self.scale_factor))
+        colourbar_widget.setFixedHeight(int(390 * self.scale_factor))
         
-        fig = Figure(figsize=(2.5, 4), facecolor='#f8f9fa')
+        fig = Figure(figsize=(2, 4), facecolor='#bfbec1')
         ax = fig.add_subplot(111)
 
         # Create colourbar
@@ -1190,10 +1193,10 @@ class TelemetryWindow(QWidget):
                             f'{max_speed:.0f}'])
         ax.set_ylabel(f'Speed ({unit_label})', fontsize=10, fontweight='bold')
         
-        fig.subplots_adjust(left=0.30, right=0.95, top=0.98, bottom=0.02)
+        fig.subplots_adjust(left=0.5, right=0.95, top=0.98, bottom=0.02)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(int(180 * self.scale_factor), int(300 * self.scale_factor))
+        canvas.setFixedSize(int(150 * self.scale_factor), int(350 * self.scale_factor))
         
         layout = QVBoxLayout(colourbar_widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1398,7 +1401,7 @@ class TelemetryWindow(QWidget):
             QTableWidget {
                 background-color: white;
                 gridline-color: #e5e7eb;
-                font-size: 14px;
+                font-size: 16px;
                 border: 1px solid #d1d5db;
                 border-radius: 4px;
             }
@@ -1406,7 +1409,7 @@ class TelemetryWindow(QWidget):
                 background-color: #f3f4f6;
                 color: #111827;
                 font-weight: bold;
-                font-size: 13px;
+                font-size: 15px;
                 border: none;
                 border-right: 1px solid #d1d5db;
                 border-bottom: 2px solid #9ca3af;
@@ -1432,8 +1435,8 @@ class TelemetryWindow(QWidget):
         table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
 
-        table.setColumnWidth(0, int(60 * self.scale_factor))
-        table.setColumnWidth(6, int(60 * self.scale_factor))
+        table.setColumnWidth(0, int(70 * self.scale_factor))
+        table.setColumnWidth(6, int(70 * self.scale_factor))
 
         table.verticalHeader().setVisible(False)
         table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -1545,7 +1548,6 @@ class TelemetryWindow(QWidget):
             self.draw_timing_map()
 
     def draw_timing_map(self, selected_lap=None):
-        """Draw the timing comparison map"""
         from matplotlib.figure import Figure
         from matplotlib.collections import LineCollection
         import numpy as np
@@ -1704,8 +1706,11 @@ class TelemetryWindow(QWidget):
 
         # Add legend
         if legend_items is not None:
-            # Discrete legend for delta mode
             legend_widget = self.create_map_legend(legend_items, legend_title)
+            # Add some top spacing
+            spacer = QWidget()
+            spacer.setFixedHeight(int(50 * self.scale_factor))
+            map_legend_layout.addWidget(spacer)
             map_legend_layout.addWidget(legend_widget, alignment=Qt.AlignTop)
         else:
             # Continuous legend for speed mode
@@ -1829,11 +1834,11 @@ class TelemetryWindow(QWidget):
             spine.set_edgecolor('#d1d5db')
             spine.set_linewidth(1)
         
-        fig.subplots_adjust(left=0.08, right=0.98, top=0.88, bottom=0.15)
+        fig.subplots_adjust(left=0.08, right=0.98, top=0.85, bottom=0.25)
         
      
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(int(300 * self.scale_factor))
+        canvas.setFixedHeight(int(235 * self.scale_factor))
         
         # hover tooltip with lap info
         def on_hover(event):
