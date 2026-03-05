@@ -799,7 +799,15 @@ class TelemetryWindow(QWidget):
     #================
     def make_timings_page(self):
         page = QWidget()
-        layout = QVBoxLayout(page)
+    
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        # Content widget
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
 
@@ -818,15 +826,11 @@ class TelemetryWindow(QWidget):
         # Calculate all lap data for the session
         self.calculate_lap_timings()
 
-        # Session Statistics Bar TODO port similar style to weather bar in ovw. page
+        # Session Statistics Bar
         stats_bar = self.create_session_stats_bar()
         layout.addWidget(stats_bar)
 
-
-
         # Main content area - Table and Map side by side
-        content_layout = QHBoxLayout()
-        
         content_layout = QHBoxLayout()
         content_layout.setSpacing(15)
 
@@ -914,14 +918,21 @@ class TelemetryWindow(QWidget):
 
 
         
-        self.draw_timing_map()
-
-       
+        # Lap time chart (now it won't overlap)
         lap_chart = self.create_lap_time_chart()
         if lap_chart:
             layout.addWidget(lap_chart)
 
-        layout.addStretch() 
+        # Set content to scroll area
+        scroll.setWidget(content_widget)
+        
+        # Page layout
+        page_layout = QVBoxLayout(page)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        page_layout.addWidget(scroll)
+
+        # Initialize map
+        self.draw_timing_map()
 
         return page
     
@@ -1208,7 +1219,7 @@ class TelemetryWindow(QWidget):
 
     def create_session_stats_bar(self):
         stats_bar = QWidget()
-        stats_bar.setFixedHeight(int(120 * self.scale_factor))
+        stats_bar.setFixedHeight(int(150 * self.scale_factor))
         stats_bar.setStyleSheet("""
             QWidget {
                 background-color: #f8f9fa;
@@ -1447,7 +1458,7 @@ class TelemetryWindow(QWidget):
         for row, (lap, data) in enumerate(sorted(self.lap_timings.items())):
             # Lap number
             lap_item = QTableWidgetItem()
-            lap_item.setData(Qt.DisplayRole, lap)  # Store as integer for proper sorting
+            lap_item.setData(Qt.DisplayRole, lap) 
             lap_item.setTextAlignment(Qt.AlignCenter)
             
             # Lap time
@@ -1480,7 +1491,7 @@ class TelemetryWindow(QWidget):
             # Highlight best lap
             if self.best_lap is not None and lap == self.best_lap:
                 for item in [lap_item, time_item, s1_item, s2_item, s3_item, delta_item, valid_item]:
-                    item.setBackground(QColor("#d4edda"))  # Light green
+                    item.setBackground(QColor("#d4edda")) 
             
             # Gray out invalid laps
             if not data['is_valid']:
@@ -1694,7 +1705,9 @@ class TelemetryWindow(QWidget):
 
         # Create canvas
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(int(650 * self.scale_factor), int(650 * self.scale_factor))
+        canvas.setMinimumSize(int(450 * self.scale_factor), int(450 * self.scale_factor))
+        canvas.setMaximumSize(int(900 * self.scale_factor), int(900 * self.scale_factor))
+        canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         # Create horizontal layout for map + legend
         map_legend_container = QWidget()
@@ -2857,7 +2870,7 @@ class TelemetryWindow(QWidget):
 
         # Speed display box
         self.speed_display_widget = QWidget()
-        self.speed_display_widget.setFixedHeight(int(100 * self.scale_factor))
+        self.speed_display_widget.setFixedHeight(int(150 * self.scale_factor))
         self.speed_display_widget.setFixedWidth(int(150 * self.scale_factor))
         self.speed_display_widget.setStyleSheet("""
             QWidget {
@@ -3298,7 +3311,7 @@ class TelemetryWindow(QWidget):
 
 
         self.map_canvas = ZoomableCanvas(fig_map)
-        self.map_canvas.setFixedSize(int(800 * self.scale_factor), int(650 * self.scale_factor))
+        self.map_canvas.setFixedSize(int(1000 * self.scale_factor), int(800 * self.scale_factor))
 
         self.map_ax = ax_map
 
@@ -3426,7 +3439,7 @@ class TelemetryWindow(QWidget):
         fig_pedal.subplots_adjust(left=0.08, right=0.98, top=0.90, bottom=0.25)
 
         self.pedal_canvas = FigureCanvas(fig_pedal)
-        self.pedal_canvas.setFixedSize(int(800 * self.scale_factor), int(250 * self.scale_factor))
+        self.pedal_canvas.setFixedSize(int(850 * self.scale_factor), int(200 * self.scale_factor))
         self.pedal_graph_layout.addWidget(self.pedal_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
 
         self.playback_time_data = []
@@ -3467,7 +3480,7 @@ class TelemetryWindow(QWidget):
         fig_gear.subplots_adjust(left=0.08, right=0.98, top=0.90, bottom=0.15)
 
         self.gear_canvas = FigureCanvas(fig_gear)
-        self.gear_canvas.setFixedSize(int(800 * self.scale_factor), int(180 * self.scale_factor))
+        self.gear_canvas.setFixedSize(int(850* self.scale_factor), int(200 * self.scale_factor))
         self.gear_graph_layout.addWidget(self.gear_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
 
         self.playback_gear_data = []
