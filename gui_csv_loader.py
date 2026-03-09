@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QSize
 from PySide6.QtCore import QTimer
+from PySide6.QtCore import QPoint
 
 from PySide6.QtGui import QIcon
 from PySide6.QtGui import QPixmap
@@ -36,10 +37,15 @@ from PySide6.QtGui import QIcon
 from PySide6.QtGui import QFont
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QPalette
+from PySide6.QtGui import QCursor
+
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+import numpy as np
 
 from scipy.ndimage import median_filter
 
@@ -132,20 +138,7 @@ class TelemetryWindow(QWidget):
     def __init__(self, session_info, telemetry_df, session_type):
         super().__init__()
 
-        #screen size
-        screen = QApplication.primaryScreen()
-        screen_geometry = screen.geometry()
-        screen_width = screen_geometry.width()
-        
-        if screen_width <= 1920:
-            self.scale_factor = 0.7  
-        elif screen_width <= 2560:
-            self.scale_factor = 0.85  
-        else:
-            self.scale_factor = 1.0  
-        
-        print(f"Screen width: {screen_width}px, Scale factor: {self.scale_factor}")
-        
+        self.scale_factor = 1.0
 
         self.session_info = session_info
         self.telemetry_df = telemetry_df
@@ -322,6 +315,58 @@ class TelemetryWindow(QWidget):
         body_layout.addWidget(left_panel)
         body_layout.addWidget(self.stack)
 
+    def showEvent(self, event):
+        """Called when window is first shown - NOW we can detect the correct screen"""
+        super().showEvent(event)
+            
+        # Only set scale factor once
+        if not hasattr(self, '_scale_factor_set'):
+            screen = self.screen()
+            if screen is None:
+                screen = QApplication.primaryScreen()
+                
+            screen_geometry = screen.geometry()
+            screen_width = screen_geometry.width()
+                
+            if screen_width <= 1920:
+                self.scale_factor = 0.7  
+            elif screen_width <= 2560:
+                self.scale_factor = 0.85  
+            else:
+                self.scale_factor = 1.0
+                
+            print(f"Screen detected: {screen_width}px, Scale factor: {self.scale_factor}")
+            self._scale_factor_set = True
+                
+            # Trigger rebuild of pages with correct scale factor
+            self.rebuild_pages()
+        
+    def rebuild_pages(self):
+        """Rebuild pages with correct scale factor"""
+        self.stack.removeWidget(self.page_overview)
+        self.stack.removeWidget(self.page_timings)
+        self.stack.removeWidget(self.page_pedals)
+        self.stack.removeWidget(self.page_brakes)
+        self.stack.removeWidget(self.page_tyres)
+        self.stack.removeWidget(self.page_fuel)
+        self.stack.removeWidget(self.page_data)
+            
+        self.page_overview = self.make_overview_page()
+        self.page_timings = self.make_timings_page()
+        self.page_pedals = self.make_pedals_page()
+        self.page_brakes = self.make_braking_page()
+        self.page_tyres = self.make_tyres_page()
+        self.page_fuel = self.make_fuel_page()
+        self.page_data = self.make_page("Data Viewer")
+            
+        self.stack.addWidget(self.page_overview)
+        self.stack.addWidget(self.page_timings)
+        self.stack.addWidget(self.page_pedals)
+        self.stack.addWidget(self.page_brakes)
+        self.stack.addWidget(self.page_tyres)
+        self.stack.addWidget(self.page_fuel)
+        self.stack.addWidget(self.page_data)
+
         # Load CSV head
         self.load_table_preview()
 
@@ -441,7 +486,6 @@ class TelemetryWindow(QWidget):
         ax.grid(True, alpha=0.2, linestyle='--')
         ax.set_facecolor('white')
     
-        # remove axis labels
         ax.set_xticks([])
         ax.set_yticks([])
     
@@ -858,7 +902,7 @@ class TelemetryWindow(QWidget):
 
         # Map toggle
         map_toggle_layout = QHBoxLayout()
-        map_toggle_layout.setContentsMargins(0, int(25 * self.scale_factor), 0, 0)  # Add top margin
+        map_toggle_layout.setContentsMargins(0, int(25 * self.scale_factor), 0, 0)  
         map_toggle_layout.addStretch()
 
         map_toggle_label = QLabel("Map Mode:")
@@ -1866,7 +1910,6 @@ class TelemetryWindow(QWidget):
                         return
                 QToolTip.hideText()
         
-        canvas.mpl_connect('motion_notify_event', on_hover)
         
         return canvas
     
@@ -2707,7 +2750,16 @@ class TelemetryWindow(QWidget):
     #================
     def make_pedals_page(self):
         page = QWidget()
-        layout = QVBoxLayout(page)
+
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)  
         layout.setContentsMargins(5, 5, 5, 1)
         layout.setSpacing(1)
 
@@ -2721,7 +2773,7 @@ class TelemetryWindow(QWidget):
         layout.addWidget(title)
 
         content_layout = QHBoxLayout()
-        content_layout.setSpacing(10)
+        content_layout.setSpacing(int(1 * self.scale_factor))
 
         lap_selector_container = QWidget()
         lap_selector_container.setFixedWidth(250)
@@ -2786,22 +2838,21 @@ class TelemetryWindow(QWidget):
         self.map_speed_container = QWidget()
         map_speed_layout = QHBoxLayout(self.map_speed_container)
         map_speed_layout.setContentsMargins(0, 0, 0, 0)
-        map_speed_layout.setSpacing(10)
+        map_speed_layout.setSpacing(0)
         map_speed_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
 
         # Left side: map container with toggle
         map_with_toggle = QWidget()
         map_with_toggle_layout = QVBoxLayout(map_with_toggle)
         map_with_toggle_layout.setContentsMargins(0, 0, 0, 0)
-        map_with_toggle_layout.setSpacing(5)
+        map_with_toggle_layout.setSpacing(0)
 
         #Gear/Throttle toggle
         toggle_container = QWidget()
         toggle_container.setFixedHeight(40)
         toggle_layout = QHBoxLayout(toggle_container)
         toggle_layout.setContentsMargins(0, 0, 0, 0)
-        toggle_layout.setSpacing(10)
-        toggle_layout.addStretch()  
+        toggle_layout.setSpacing(10)  
 
         toggle_label = QLabel("Map View:")
         toggle_label.setStyleSheet("font-size: 12px; color: black; font-weight: bold;")
@@ -2844,6 +2895,7 @@ class TelemetryWindow(QWidget):
 
         toggle_layout.addWidget(self.map_mode_throttle)
         toggle_layout.addWidget(self.map_mode_gear)
+        toggle_layout.addStretch()
 
         map_with_toggle_layout.addWidget(toggle_container)
 
@@ -2852,6 +2904,7 @@ class TelemetryWindow(QWidget):
         self.pedal_map_layout = QVBoxLayout(self.pedal_map_container)
         self.pedal_map_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.pedal_map_layout.setContentsMargins(0, 0, 0, 0)
+        self.pedal_map_layout.setSpacing(0)
 
         map_with_toggle_layout.addWidget(self.pedal_map_container)
 
@@ -3088,6 +3141,13 @@ class TelemetryWindow(QWidget):
         if self.lap_list.count() > 0:
             self.lap_list.setCurrentRow(0)
             self.update_pedal_track_map_from_list()
+        
+        scroll.setWidget(content_widget)
+    
+        page_layout = QVBoxLayout(page)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        page_layout.addWidget(scroll)
+
 
         return page
 
@@ -3311,7 +3371,7 @@ class TelemetryWindow(QWidget):
 
 
         self.map_canvas = ZoomableCanvas(fig_map)
-        self.map_canvas.setFixedSize(int(1000 * self.scale_factor), int(800 * self.scale_factor))
+        self.map_canvas.setFixedSize(int(780 * self.scale_factor), int(780 * self.scale_factor))
 
         self.map_ax = ax_map
 
@@ -3400,7 +3460,7 @@ class TelemetryWindow(QWidget):
       
 
         # Add the container to the pedal_map_layout
-        self.pedal_map_layout.addWidget(self.map_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
+        self.pedal_map_layout.addWidget(self.map_canvas)
 
 
         # ===== PEDAL GRAPH =====
@@ -3439,7 +3499,7 @@ class TelemetryWindow(QWidget):
         fig_pedal.subplots_adjust(left=0.08, right=0.98, top=0.90, bottom=0.25)
 
         self.pedal_canvas = FigureCanvas(fig_pedal)
-        self.pedal_canvas.setFixedSize(int(850 * self.scale_factor), int(200 * self.scale_factor))
+        self.pedal_canvas.setFixedSize(int(960 * self.scale_factor), int(320 * self.scale_factor))
         self.pedal_graph_layout.addWidget(self.pedal_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
 
         self.playback_time_data = []
@@ -3480,7 +3540,7 @@ class TelemetryWindow(QWidget):
         fig_gear.subplots_adjust(left=0.08, right=0.98, top=0.90, bottom=0.15)
 
         self.gear_canvas = FigureCanvas(fig_gear)
-        self.gear_canvas.setFixedSize(int(850* self.scale_factor), int(200 * self.scale_factor))
+        self.gear_canvas.setFixedSize(int(960* self.scale_factor), int(280 * self.scale_factor))
         self.gear_graph_layout.addWidget(self.gear_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
 
         self.playback_gear_data = []
@@ -3656,27 +3716,23 @@ class TelemetryWindow(QWidget):
         windowed_brake_raw = brakes[start_idx:]
         windowed_gear = gears[start_idx:]
 
-        # Aggressive spike removal for throttle
-        # If braking >10%, throttle should be near 0. Any spike is noise.
+        # Spike removel, data cleaning to remove anomalies and abnormalities which can be present in iracing data
         windowed_throttle = []
         for i, (thr, brk) in enumerate(zip(windowed_throttle_raw, windowed_brake_raw)):
-            if brk > 10 and thr > 10:  # Braking + throttle spike = invalid
-                # Replace with 0 or previous valid value
+            if brk > 10 and thr > 10: 
                 if i > 0 and windowed_throttle[-1] < 5:
                     windowed_throttle.append(windowed_throttle[-1])
                 else:
                     windowed_throttle.append(0)
             else:
                 windowed_throttle.append(thr)
-
-        # Apply median filter to smooth remaining noise
         if len(windowed_throttle) > 3:
             windowed_throttle = list(median_filter(windowed_throttle, size=5))
             
         windowed_brake = list(median_filter(windowed_brake_raw, size=3)) if len(windowed_brake_raw) > 3 else windowed_brake_raw
 
 
-        # Update pedal graph
+
         self.throttle_line.set_data(windowed_times, windowed_throttle)
         self.brake_line.set_data(windowed_times, windowed_brake)
 
@@ -3687,7 +3743,6 @@ class TelemetryWindow(QWidget):
 
         self.pedal_canvas.draw()
 
-        # Update gear graph
         self.gear_line.set_data(windowed_times, windowed_gear)
 
         if current_time_seconds > window_seconds:
@@ -3696,8 +3751,6 @@ class TelemetryWindow(QWidget):
             self.gear_ax.set_xlim(0, window_seconds)
 
         self.gear_canvas.draw()
-
-        # Update time label
         total_lap_time = total_lap_ticks / ticks_per_second
         self.playback_time_label.setText(f"{current_time_seconds:.3f}s / {total_lap_time:.3f}s")
 
@@ -3878,82 +3931,269 @@ class TelemetryWindow(QWidget):
         return page
 
     def detect_all_lockups(self):
-        MIN_WHEEL_SPEED = 2  
-        MIN_GPS_SPEED = 10  
-        GAP_THRESHOLD = 5  
+        #current definition of lockup for lockup detection
+        MIN_WHEEL_SPEED = 2  # m/s
+        MIN_GPS_SPEED = 10   # m/s
+        GAP_THRESHOLD = 5    # ticks
         
-        self.all_lockups = {
-            'LF': [],
-            'RF': [],
-            'LR': [],
-            'RR': []
-        }
+        self.all_lockups = {'LF': [], 'RF': [], 'LR': [], 'RR': []}
         
-        # Temporary storage for raw lockup points
-        raw_lockups = {
-            'LF': [],
-            'RF': [],
-            'LR': [],
-            'RR': []
-        }
-        
-        # Process all data - collect raw lockup points
-        for idx, row in self.telemetry_df.iterrows():
-            gps_speed = row['Speed']
-            
-            # Car must be moving
-            if gps_speed < MIN_GPS_SPEED:
+        for _, row in self.telemetry_df.iterrows():
+            lap_num = row['Lap']
+            if lap_num <= 0:
                 continue
             
-            # Check each wheel
+            speed = row['Speed']
+            if speed < MIN_GPS_SPEED:
+                continue
+            
+            idx = row.name
+            
             wheels = {
-                'LF': row.get('LFspeed', gps_speed),
-                'RF': row.get('RFspeed', gps_speed),
-                'LR': row.get('LRspeed', gps_speed),
-                'RR': row.get('RRspeed', gps_speed)
+                'LF': row['LFspeed'],
+                'RF': row['RFspeed'],
+                'LR': row['LRspeed'],
+                'RR': row['RRspeed']
+            }
+            
+            temp_cols_surface = {
+                'LF': ['LFtempCL', 'LFtempCM', 'LFtempCR'],
+                'RF': ['RFtempCL', 'RFtempCM', 'RFtempCR'],
+                'LR': ['LRtempCL', 'LRtempCM', 'LRtempCR'],
+                'RR': ['RRtempCL', 'RRtempCM', 'RRtempCR']
             }
             
             for wheel_name, wheel_speed in wheels.items():
-                # Lockup = wheel essentially stopped but car still moving
                 if wheel_speed < MIN_WHEEL_SPEED:
-                    raw_lockups[wheel_name].append({
-                        'lap': row['Lap'],
-                        'lon': row['Lon'],
-                        'lat': row['Lat'],
-                        'speed': gps_speed,
-                        'wheel_speed': wheel_speed,
-                        'tick': row['SessionTick']
-                    })
+                    start_idx = max(0, idx - 5)
+                    end_idx = min(len(self.telemetry_df), idx + 5)
+                    window = self.telemetry_df.iloc[start_idx:end_idx]
+                    
+                    temp_cols_surface = {
+                        'LF': ['LFtempL', 'LFtempM', 'LFtempR'], 
+                        'RF': ['RFtempL', 'RFtempM', 'RFtempR'],
+                        'LR': ['LRtempL', 'LRtempM', 'LRtempR'],
+                        'RR': ['RRtempL', 'RRtempM', 'RRtempR']
+                    }
+                    
+                    for wheel_name, wheel_speed in wheels.items():
+                        if wheel_speed < MIN_WHEEL_SPEED:
+                            start_idx = max(0, idx - 5)
+                            end_idx = min(len(self.telemetry_df), idx + 5)
+                            window = self.telemetry_df.iloc[start_idx:end_idx]
+                            
+                            max_temp = window[temp_cols_surface[wheel_name]].max().max()
+                            
+                            lockup_data = {
+                                'idx': idx,
+                                'lap': int(lap_num),
+                                'wheel': wheel_name,
+                                'lon': row['Lon'],
+                                'lat': row['Lat'],
+                                'speed': speed * 3.6,
+                                'brake': row['Brake'],
+                                'max_temp': max_temp
+                            }
+                            self.all_lockups[wheel_name].append(lockup_data)
         
-        # Group consecutive points into single lockup events
-        for wheel_name, points in raw_lockups.items():
-            if not points:
+        for wheel_name in self.all_lockups:
+            if not self.all_lockups[wheel_name]:
                 continue
             
-            # Sort by tick
-            points = sorted(points, key=lambda x: x['tick'])
+            grouped = []
+            current_group = [self.all_lockups[wheel_name][0]]
             
-            # Group consecutive points
-            current_event = [points[0]]
-            
-            for i in range(1, len(points)):
-                tick_gap = points[i]['tick'] - points[i-1]['tick']
-                
-                if tick_gap <= GAP_THRESHOLD:
-                    # Same lockup event - add to current
-                    current_event.append(points[i])
+            for i in range(1, len(self.all_lockups[wheel_name])):
+                if self.all_lockups[wheel_name][i]['idx'] - current_group[-1]['idx'] <= GAP_THRESHOLD:
+                    current_group.append(self.all_lockups[wheel_name][i])
                 else:
-                    # New lockup event - save previous and start new
-                    # Use middle point of the event as representative
-                    mid_idx = len(current_event) // 2
-                    self.all_lockups[wheel_name].append(current_event[mid_idx])
-                    current_event = [points[i]]
+                    first_tick = self.telemetry_df.iloc[current_group[0]['idx']]['SessionTick']
+                    last_tick = self.telemetry_df.iloc[current_group[-1]['idx']]['SessionTick']
+                    duration = (last_tick - first_tick) / 60 
+                    
+                    mid_idx = len(current_group) // 2
+                    middle_event = current_group[mid_idx].copy()
+                    middle_event['duration'] = duration
+                    grouped.append(middle_event)
+                    
+                    current_group = [self.all_lockups[wheel_name][i]]
             
-            # Don't forget the last event
-            if current_event:
-                mid_idx = len(current_event) // 2
-                self.all_lockups[wheel_name].append(current_event[mid_idx])
+            if current_group:
+                first_tick = self.telemetry_df.iloc[current_group[0]['idx']]['SessionTick']
+                last_tick = self.telemetry_df.iloc[current_group[-1]['idx']]['SessionTick']
+                duration = (last_tick - first_tick) / 60
+                
+                mid_idx = len(current_group) // 2
+                middle_event = current_group[mid_idx].copy()
+                middle_event['duration'] = duration
+                grouped.append(middle_event)
+            
+            self.all_lockups[wheel_name] = grouped
+    
+    # table to display lockup info such as lap of occurance, max temp recorded, tyre(s) locked, and duration(seconds) of lockp
+    def create_lockup_table(self):
+        all_events = []
+        for wheel_name, lockups in self.all_lockups.items():
+            for lockup in lockups:
+                all_events.append(lockup)
+        
+        all_events.sort(key=lambda x: x['lap'])
+        
+        from collections import defaultdict
+        lap_groups = defaultdict(list)
+        for event in all_events:
+            lap_groups[event['lap']].append(event)
+        
+        table = QTableWidget()
+        table.setColumnCount(5)
+        table.setHorizontalHeaderLabels(['Lap', 'Tyres', 'Max Temp (°C)', 'Brake (%)', 'Length (s)'])
+        table.setRowCount(len(lap_groups))
+        
+        table.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                gridline-color: #e5e7eb;
+                font-size: 22px;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                outline: none;
+            }
+            QHeaderView::section {
+                background-color: #f3f4f6;
+                color: #111827;
+                font-weight: bold;
+                font-size: 18px;
+                border: none;
+                border-right: 1px solid #d1d5db;
+                border-bottom: 2px solid #9ca3af;
+                padding: 12px;
+            }
+            QTableWidget::item {
+                padding: 12px;
+                border-bottom: 1px solid #f3f4f6;
+                color: #000000;
+                outline: none;
+            }
+            QTableWidget::item:selected {
+                background-color: #3b82f6;
+                color: white;
+            }
+            QTableWidget::item:focus {
+                outline: none; 
+            }
+        """)
+        
+        row = 0
+        for lap_num in sorted(lap_groups.keys()):
+            events = lap_groups[lap_num]
+            
+            #lap #
+            lap_item = QTableWidgetItem(str(lap_num))
+            lap_item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, 0, lap_item)
+            
+            #tyre 
+            tyres = ', '.join(sorted(set(e['wheel'] for e in events)))
+            tyre_item = QTableWidgetItem(tyres)
+            tyre_item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, 1, tyre_item)
+            
+            #max temp *C
+            max_temp = max(e['max_temp'] for e in events)
+            temp_item = QTableWidgetItem(f"{max_temp:.1f}")
+            temp_item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, 2, temp_item)
+            
+            # brake pressure (% raw input)
+            avg_brake = sum(e['brake'] for e in events) / len(events)
+            brake_item = QTableWidgetItem(f"{avg_brake:.1f}")
+            brake_item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, 3, brake_item)
+            
+            # duration s
+            max_duration = max(e['duration'] for e in events)
+            duration_item = QTableWidgetItem(f"{max_duration:.3f}")
+            duration_item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, 4, duration_item)
+            
+            row += 1
+        
 
+        table.setMaximumWidth(715)
+        table.setMinimumWidth(715)  
+        table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+
+        table_container = QWidget()
+        table_container.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #d1d5db;
+                border-radius: 8px;
+            }
+        """)
+        table_container_layout = QVBoxLayout(table_container)
+        table_container_layout.setContentsMargins(0, 0, 0, 0)
+        table_container_layout.addWidget(table)
+
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setColumnWidth(0, 80)
+        table.setColumnWidth(1, 150)
+        table.setColumnWidth(2, 160)
+        table.setColumnWidth(3, 110)
+        table.setColumnWidth(4, 120)
+        
+        table.verticalHeader().setVisible(False)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        self.lockup_lap_groups = lap_groups
+
+        table.itemSelectionChanged.connect(lambda: self.highlight_selected_lockup(table))
+    
+        return table_container
+    
+
+    def highlight_selected_lockup(self, table):
+        selected_rows = table.selectionModel().selectedRows()
+        
+        if not selected_rows or not hasattr(self, 'lockup_scatter'):
+            return
+        
+        selected_row = selected_rows[0].row()
+        sorted_laps = sorted(self.lockup_lap_groups.keys())
+        selected_lap = sorted_laps[selected_row]
+
+        # ensure highlighted dot is drawn over existing ones, (blue over red, was being hidden)
+        highlight_lons = []
+        highlight_lats = []
+        normal_lons = []
+        normal_lats = []
+        
+        for lockup in self.lockup_metadata:
+            if lockup['lap'] == selected_lap:
+                highlight_lons.append(lockup['lon'])
+                highlight_lats.append(lockup['lat'])
+            else:
+                normal_lons.append(lockup['lon'])
+                normal_lats.append(lockup['lat'])
+        
+        self.lockup_scatter.remove()
+        if normal_lons:
+            self.lockup_map_ax.scatter(normal_lons, normal_lats,
+                                    color='#ef4444',
+                                    s=150,
+                                    alpha=0.6,
+                                    zorder=5)
+        
+        if highlight_lons:
+            self.lockup_scatter = self.lockup_map_ax.scatter(highlight_lons, highlight_lats,
+                                                            color='#3b82f6',
+                                                            s=150,
+                                                            alpha=0.9, 
+                                                            zorder=10)  
+        
+        self.lockup_map_canvas.draw_idle()
+        
     def populate_lockup_lap_selector(self):
     
         while self.lockup_lap_cb_layout.count():
@@ -4013,7 +4253,6 @@ class TelemetryWindow(QWidget):
             cb.setChecked(is_checked)
 
     def update_lockup_display(self):
-       
         selected_laps = [lap for lap, cb in self.lockup_lap_checkboxes.items() if cb.isChecked()]
         
         if not selected_laps:
@@ -4029,18 +4268,28 @@ class TelemetryWindow(QWidget):
             if child.widget():
                 child.widget().deleteLater()
         
+        map_and_table_container = QWidget()
+        map_and_table_layout = QHBoxLayout(map_and_table_container)
+        map_and_table_layout.setContentsMargins(0, 0, 0, 0)
+        map_and_table_layout.setSpacing(15)
+        
         map_widget = self.create_lockup_track_map(selected_laps)
         if map_widget:
-            self.lockup_map_layout.addWidget(map_widget)
+            map_and_table_layout.addWidget(map_widget)
+
+        table_widget = self.create_lockup_table()
+        if table_widget:
+            map_and_table_layout.addWidget(table_widget)
+
+        map_and_table_layout.addStretch()
         
+        self.lockup_map_layout.addWidget(map_and_table_container)
+
         stats_widget = self.create_lockup_stats(selected_laps)
         if stats_widget:
             self.lockup_stats_layout.addWidget(stats_widget)
 
     def create_lockup_track_map(self, selected_laps):
-        from matplotlib.figure import Figure
-        import numpy as np
-        
 
         first_lap = sorted(self.lap_timings.keys())[0]
         lap_data = self.telemetry_df[self.telemetry_df["Lap"] == first_lap].copy()
@@ -4057,7 +4306,7 @@ class TelemetryWindow(QWidget):
         
         ax.plot(lap_data["Lon"], lap_data["Lat"], 
             linewidth=8, color='#d1d5db', zorder=1, alpha=0.8)
-        
+
         start_lon = lap_data["Lon"].iloc[0]
         start_lat = lap_data["Lat"].iloc[0]
         second_lon = lap_data["Lon"].iloc[1]
@@ -4079,6 +4328,7 @@ class TelemetryWindow(QWidget):
         
         all_lons = []
         all_lats = []
+        self.lockup_metadata = []  
         
         for wheel_name in selected_wheels:
             lockups = self.all_lockups[wheel_name]
@@ -4087,15 +4337,26 @@ class TelemetryWindow(QWidget):
             if wheel_lockups:
                 all_lons.extend([l['lon'] for l in wheel_lockups])
                 all_lats.extend([l['lat'] for l in wheel_lockups])
+                self.lockup_metadata.extend(wheel_lockups)  
         
         if all_lons:
-            ax.scatter(all_lons, all_lats, 
+            print(f"\n=== PLOTTING {len(all_lons)} LOCKUPS ===")
+            for i in range(min(5, len(all_lons))):  # Print first 5
+                print(f"Plot point {i}: lon={all_lons[i]:.6f}, lat={all_lats[i]:.6f}")
+            
+            print(f"\n=== METADATA {len(self.lockup_metadata)} LOCKUPS ===")
+            for i in range(min(5, len(self.lockup_metadata))):  # Print first 5
+                print(f"Metadata {i}: lon={self.lockup_metadata[i]['lon']:.6f}, lat={self.lockup_metadata[i]['lat']:.6f}")
+            
+            self.lockup_scatter = ax.scatter(all_lons, all_lats, 
                     color='#ef4444', 
-                    s=80,
-                    alpha=0.4,
+                    s=150,
+                    alpha=0.6,
                     zorder=5,
                     label='Lockups')
             ax.legend(loc='upper right', fontsize=11, framealpha=0.9)
+        else:
+            self.lockup_metadata = []
         
         ax.set_title('Lockup Locations', fontsize=16, fontweight='bold', pad=10)
         ax.set_aspect('equal')
@@ -4106,15 +4367,13 @@ class TelemetryWindow(QWidget):
         ax.set_ylim(lap_data["Lat"].min() - 0.0005, lap_data["Lat"].max() + 0.0005)
         
         fig.subplots_adjust(left=0.02, right=0.98, top=0.95, bottom=0.02)
-        
-        canvas = FigureCanvas(fig)
-        canvas.setFixedSize(int(900 * self.scale_factor), int(700 * self.scale_factor))
 
-        
-        self.lockup_map_canvas = canvas
-        
-        return canvas
+        self.lockup_map_canvas = ZoomableCanvas(fig)
+        self.lockup_map_canvas.setFixedSize(int(1100 * self.scale_factor), int(900 * self.scale_factor))
 
+        return self.lockup_map_canvas
+    
+            
     def get_selected_lockup_wheels(self):
         if not hasattr(self, 'lockup_wheel_toggles'):
             return ['LF', 'RF', 'LR', 'RR']  
@@ -4889,13 +5148,37 @@ class CSVLoader(QWidget):
             telemetry_df["LapDistPct"].astype(float) / 100.0
         )
 
-        # close window
+        # close popup
         msg.close()
 
         self.close()  
+        
+        # Create window
         self.telemetry_window = TelemetryWindow(session_info, telemetry_df, session_type)
         self.telemetry_window.setWindowFlags(Qt.Window)
+        
+        # Show it first (this assigns it to a screen)
         self.telemetry_window.showMaximized()
+        
+        # NOW detect the screen and update scale factor
+        screen = self.telemetry_window.screen()
+        if screen is None:
+            screen = QApplication.primaryScreen()
+        
+        screen_width = screen.geometry().width()
+        
+        if screen_width <= 1920:
+            self.telemetry_window.scale_factor = 0.7  
+        elif screen_width <= 2560:
+            self.telemetry_window.scale_factor = 0.85  
+        else:
+            self.telemetry_window.scale_factor = 1.0
+        
+        print(f"✓ Window shown on screen: {screen_width}px, Scale factor: {self.telemetry_window.scale_factor}")
+        
+        # Rebuild pages with correct scale
+        self.telemetry_window.rebuild_pages()
+        
         self.session_type = session_type
 
 
@@ -4909,6 +5192,21 @@ if __name__ == "__main__":
     window.show()
     sys.exit(app.exec())
 
+#TEMP TO TEST SIZES ON SMALLER MONITOR TODO: REMOVE UPON FINAL SHIP
+"""if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon("icons/c2k.png"))
+    window = CSVLoader()
+    
+    # Force to smallest screen (your 1080p monitor)
+    screens = QApplication.screens()
+    if len(screens) > 1:
+        smallest_screen = min(screens, key=lambda s: s.geometry().width())
+        screen_geo = smallest_screen.geometry()
+        window.move(screen_geo.x() + 100, screen_geo.y() + 100)
+    
+    window.show()
+    sys.exit(app.exec())"""
 
 #TODO: SORTING OF LAPS NOT WORKING PROPERLY
 
