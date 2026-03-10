@@ -3776,7 +3776,7 @@ class TelemetryWindow(QWidget):
        
         title = QLabel("Braking Analysis - Lockup Detection")
         title.setStyleSheet("""
-            font-size: 38px;
+            font-size: 45px;
             font-weight: bold;
             color: #000007;
         """)
@@ -3790,7 +3790,7 @@ class TelemetryWindow(QWidget):
         wheel_filter_layout.setSpacing(10)
 
         filter_label = QLabel("Show Wheels:")
-        filter_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #111827;")
+        filter_label.setStyleSheet(f"font-size: 15px;")
         wheel_filter_layout.addWidget(filter_label)
 
         self.lockup_wheel_toggles = {}
@@ -3800,14 +3800,14 @@ class TelemetryWindow(QWidget):
             btn = QPushButton(wheel_name)
             btn.setCheckable(True)
             btn.setChecked(True)
-            btn.setFixedSize(50, 30)
+            btn.setFixedSize(int(50 * self.scale_factor), int(30 * self.scale_factor))
             btn.setStyleSheet("""
                 QPushButton {
                     background-color: #e5e7eb;
                     color: #6b7280;
                     border: 1px solid #d1d5db;
                     border-radius: 4px;
-                    font-size: 12px;
+                    font-size: 14px;
                     font-weight: bold;
                 }
                 QPushButton:checked {
@@ -3847,8 +3847,8 @@ class TelemetryWindow(QWidget):
         lap_selector_container.setStyleSheet("""
             QWidget {
                 background-color: white;
-                border-radius: 8px;
-                border: 1px solid #e5e7eb;
+                border-radius: 0px;
+                border: none;
             }
         """)
         lap_selector_layout = QVBoxLayout(lap_selector_container)
@@ -3856,7 +3856,7 @@ class TelemetryWindow(QWidget):
         lap_selector_layout.setSpacing(10)
 
         selector_title = QLabel("Select Laps")
-        selector_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #111827;")
+        selector_title.setStyleSheet(f"font-size: 17px;")
         lap_selector_layout.addWidget(selector_title)
 
       
@@ -3864,13 +3864,13 @@ class TelemetryWindow(QWidget):
         self.lockup_all_laps_cb.setChecked(True)
         self.lockup_all_laps_cb.setStyleSheet("""
             QCheckBox {
-                font-size: 15px;
+                font-size: 18px;
                 color: #111827;
                 font-weight: bold;
             }
             QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
+                width: {int(18 * self.scale_factor)}px;
+                height: {int(18 * self.scale_factor)}px;
                 border: 2px solid #9ca3af;
                 border-radius: 3px;
                 background-color: white;
@@ -3904,7 +3904,22 @@ class TelemetryWindow(QWidget):
         lap_selector_layout.addWidget(lap_scroll)
 
         
-        content_layout.addWidget(lap_selector_container)
+        lap_selector_wrapper = QWidget()
+        lap_selector_wrapper.setFixedWidth(int(258 * self.scale_factor))
+        lap_selector_wrapper.setStyleSheet("""
+            QWidget#lap_wrapper {
+                background-color: white;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        lap_selector_wrapper.setObjectName("lap_wrapper")
+        lap_selector_wrapper_layout = QVBoxLayout(lap_selector_wrapper)
+        lap_selector_wrapper_layout.setContentsMargins(2, 2, 2, 2)  
+        lap_selector_wrapper_layout.addWidget(lap_selector_container)
+
+        # Add wrapper instead of container
+        content_layout.addWidget(lap_selector_wrapper)
         content_layout.addWidget(self.lockup_map_container)
 
         layout.addWidget(content_container)
@@ -4049,28 +4064,36 @@ class TelemetryWindow(QWidget):
         table.setHorizontalHeaderLabels(['Lap', 'Tyres', 'Max Temp (°C)', 'Brake (%)', 'Length (s)'])
         table.setRowCount(len(lap_groups))
         
+        table.verticalHeader().setDefaultSectionSize(int(35 * self.scale_factor))
+
         table.setStyleSheet("""
             QTableWidget {
                 background-color: white;
-                gridline-color: #e5e7eb;
-                font-size: 22px;
-                border: 1px solid #d1d5db;
-                border-radius: 4px;
+                gridline-color: #9ca3af;
+                font-size: 19px;
+                border: none;
+                border-radius: 0px;
                 outline: none;
             }
             QHeaderView::section {
                 background-color: #f3f4f6;
                 color: #111827;
                 font-weight: bold;
-                font-size: 18px;
+                font-size: {int(22 * self.scale_factor)}px;
                 border: none;
-                border-right: 1px solid #d1d5db;
+                border-right: 1px solid #9ca3af;
                 border-bottom: 2px solid #9ca3af;
-                padding: 12px;
+                border-left: 1px solid #9ca3af;           
+                padding: {int(15 * self.scale_factor)}px;
+            }
+            QHeaderView::section:first {
+                border-left: 1px solid #d1d5db;
             }
             QTableWidget::item {
-                padding: 12px;
-                border-bottom: 1px solid #f3f4f6;
+                padding: {int(19 * self.scale_factor)}px;
+                border-bottom: 1px solid #9ca3af;
+                border-right: 1px solid #9ca3af;
+                border-left: 1px solid #9ca3af;
                 color: #000000;
                 outline: none;
             }
@@ -4089,81 +4112,101 @@ class TelemetryWindow(QWidget):
             
             #lap #
             lap_item = QTableWidgetItem(str(lap_num))
-            lap_item.setTextAlignment(Qt.AlignCenter)
+            lap_item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             table.setItem(row, 0, lap_item)
             
             #tyre 
             tyres = ', '.join(sorted(set(e['wheel'] for e in events)))
             tyre_item = QTableWidgetItem(tyres)
-            tyre_item.setTextAlignment(Qt.AlignCenter)
+            tyre_item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             table.setItem(row, 1, tyre_item)
             
             #max temp *C
             max_temp = max(e['max_temp'] for e in events)
             temp_item = QTableWidgetItem(f"{max_temp:.1f}")
-            temp_item.setTextAlignment(Qt.AlignCenter)
+            temp_item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             table.setItem(row, 2, temp_item)
             
             # brake pressure (% raw input)
             avg_brake = sum(e['brake'] for e in events) / len(events)
             brake_item = QTableWidgetItem(f"{avg_brake:.1f}")
-            brake_item.setTextAlignment(Qt.AlignCenter)
+            brake_item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             table.setItem(row, 3, brake_item)
             
             # duration s
             max_duration = max(e['duration'] for e in events)
             duration_item = QTableWidgetItem(f"{max_duration:.3f}")
-            duration_item.setTextAlignment(Qt.AlignCenter)
+            duration_item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             table.setItem(row, 4, duration_item)
             
             row += 1
         
 
-        table.setMaximumWidth(715)
-        table.setMinimumWidth(715)  
+        table.setMaximumWidth(int(715 * self.scale_factor))
+        table.setMinimumWidth(int(715 * self.scale_factor)) 
         table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
         table_container = QWidget()
         table_container.setStyleSheet("""
             QWidget {
                 background-color: white;
-                border: 2px solid #d1d5db;
+                border: 2px solid #000000;
                 border-radius: 8px;
             }
         """)
         table_container_layout = QVBoxLayout(table_container)
-        table_container_layout.setContentsMargins(0, 0, 0, 0)
+        table_container_layout.setContentsMargins(int(10 * self.scale_factor), int(10 * self.scale_factor), int(10 * self.scale_factor), int(10 * self.scale_factor))
         table_container_layout.addWidget(table)
 
         table.horizontalHeader().setStretchLastSection(True)
-        table.setColumnWidth(0, 80)
-        table.setColumnWidth(1, 150)
-        table.setColumnWidth(2, 160)
-        table.setColumnWidth(3, 110)
-        table.setColumnWidth(4, 120)
+        table.setColumnWidth(0, int(80 * self.scale_factor))
+        table.setColumnWidth(1, int(150 * self.scale_factor))
+        table.setColumnWidth(2, int(160 * self.scale_factor))
+        table.setColumnWidth(3, int(110 * self.scale_factor))
+        table.setColumnWidth(4, int(120 * self.scale_factor))
         
+        table.setSortingEnabled(True)
+
+
+        for row_idx in range(table.rowCount()):
+            lap_item = table.item(row_idx, 0)
+            lap_item.setData(Qt.UserRole, int(lap_item.text()))
+            temp_item = table.item(row_idx, 2)
+            temp_item.setData(Qt.UserRole, float(temp_item.text()))
+            
+            brake_item = table.item(row_idx, 3)
+            brake_item.setData(Qt.UserRole, float(brake_item.text()))
+
+            duration_item = table.item(row_idx, 4)
+            duration_item.setData(Qt.UserRole, float(duration_item.text()))
+
         table.verticalHeader().setVisible(False)
+
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
 
         self.lockup_lap_groups = lap_groups
 
         table.itemSelectionChanged.connect(lambda: self.highlight_selected_lockup(table))
-    
+
+        self.lockup_table_widget = table 
+
         return table_container
     
 
     def highlight_selected_lockup(self, table):
+
         selected_rows = table.selectionModel().selectedRows()
         
         if not selected_rows or not hasattr(self, 'lockup_scatter'):
             return
         
+        # Get selected lap
         selected_row = selected_rows[0].row()
         sorted_laps = sorted(self.lockup_lap_groups.keys())
         selected_lap = sorted_laps[selected_row]
-
-        # ensure highlighted dot is drawn over existing ones, (blue over red, was being hidden)
+        
+        # Separate lockups into highlighted and non-highlighted
         highlight_lons = []
         highlight_lats = []
         normal_lons = []
@@ -4178,19 +4221,27 @@ class TelemetryWindow(QWidget):
                 normal_lats.append(lockup['lat'])
         
         self.lockup_scatter.remove()
+        if hasattr(self, 'lockup_scatter_normal'):
+            self.lockup_scatter_normal.remove()
+        
+        
         if normal_lons:
-            self.lockup_map_ax.scatter(normal_lons, normal_lats,
+            self.lockup_scatter_normal = self.lockup_map_ax.scatter(normal_lons, normal_lats,
                                     color='#ef4444',
                                     s=150,
                                     alpha=0.6,
-                                    zorder=5)
+                                    zorder=5,
+                                    picker=True,
+                                    pickradius=15)
         
         if highlight_lons:
             self.lockup_scatter = self.lockup_map_ax.scatter(highlight_lons, highlight_lats,
                                                             color='#3b82f6',
                                                             s=150,
-                                                            alpha=0.9, 
-                                                            zorder=10)  
+                                                            alpha=0.9,
+                                                            zorder=10,
+                                                            picker=True,
+                                                            pickradius=15)
         
         self.lockup_map_canvas.draw_idle()
         
@@ -4220,13 +4271,13 @@ class TelemetryWindow(QWidget):
             cb.setChecked(True)
             cb.setStyleSheet("""
                 QCheckBox {
-                    font-size: 15px;
+                    font-size: 17px; 
                     font-weight: bold;
                     color: #374151;
                 }
                 QCheckBox::indicator {
-                    width: 18px;
-                    height: 18px;
+                    width: {int(18 * self.scale_factor)}px;
+                    height: {int(18 * self.scale_factor)}px;
                     border: 2px solid #9ca3af;
                     border-radius: 3px;
                     background-color: white;
@@ -4299,7 +4350,7 @@ class TelemetryWindow(QWidget):
         
         lap_data = lap_data.sort_values("SessionTick")
         
-        fig = Figure(figsize=(12, 10), facecolor='#f8f9fa')
+        fig = Figure(figsize=(12, 10), facecolor='#BFBEC1')
         ax = fig.add_subplot(111)
         
         self.lockup_map_ax = ax
@@ -4341,11 +4392,11 @@ class TelemetryWindow(QWidget):
         
         if all_lons:
             print(f"\n=== PLOTTING {len(all_lons)} LOCKUPS ===")
-            for i in range(min(5, len(all_lons))):  # Print first 5
+            for i in range(min(5, len(all_lons))): 
                 print(f"Plot point {i}: lon={all_lons[i]:.6f}, lat={all_lats[i]:.6f}")
             
             print(f"\n=== METADATA {len(self.lockup_metadata)} LOCKUPS ===")
-            for i in range(min(5, len(self.lockup_metadata))):  # Print first 5
+            for i in range(min(5, len(self.lockup_metadata))):  
                 print(f"Metadata {i}: lon={self.lockup_metadata[i]['lon']:.6f}, lat={self.lockup_metadata[i]['lat']:.6f}")
             
             self.lockup_scatter = ax.scatter(all_lons, all_lats, 
@@ -4353,7 +4404,9 @@ class TelemetryWindow(QWidget):
                     s=150,
                     alpha=0.6,
                     zorder=5,
-                    label='Lockups')
+                    label='Lockups',
+                    picker=True,
+                    pickradius=15)
             ax.legend(loc='upper right', fontsize=11, framealpha=0.9)
         else:
             self.lockup_metadata = []
@@ -4366,14 +4419,46 @@ class TelemetryWindow(QWidget):
         ax.set_xlim(lap_data["Lon"].min() - 0.0005, lap_data["Lon"].max() + 0.0005)
         ax.set_ylim(lap_data["Lat"].min() - 0.0005, lap_data["Lat"].max() + 0.0005)
         
-        fig.subplots_adjust(left=0.02, right=0.98, top=0.95, bottom=0.02)
+        fig.subplots_adjust(left=0.001, right=0.999, top=0.95, bottom=0.001)
 
-        self.lockup_map_canvas = ZoomableCanvas(fig)
-        self.lockup_map_canvas.setFixedSize(int(1100 * self.scale_factor), int(900 * self.scale_factor))
+        class ClickableLockupCanvas(ZoomableCanvas):
+            def __init__(self, fig, parent_window):
+                super().__init__(fig)
+                self.parent_window = parent_window
+                self.mpl_connect('pick_event', self.on_pick)
+            
+            def on_pick(self, event):
+                if (event.artist != self.parent_window.lockup_scatter and 
+                    event.artist != getattr(self.parent_window, 'lockup_scatter_normal', None)):
+                    return
+ 
+                ind = event.ind[0]
+                clicked_point = event.artist.get_offsets()[ind]
+                clicked_lon = clicked_point[0]
+                clicked_lat = clicked_point[1]
+                
+                for lockup in self.parent_window.lockup_metadata:
+                    if abs(lockup['lon'] - clicked_lon) < 0.000001 and abs(lockup['lat'] - clicked_lat) < 0.000001:
+                        clicked_lap = lockup['lap']
+                        self.parent_window.select_table_row_by_lap(clicked_lap)
+                        break
+
+        self.lockup_map_canvas = ClickableLockupCanvas(fig, self)
+        self.lockup_map_canvas.setFixedSize(int(880 * self.scale_factor), int(870 * self.scale_factor))
 
         return self.lockup_map_canvas
     
-            
+    def select_table_row_by_lap(self, lap_num):
+        if not hasattr(self, 'lockup_table_widget'):
+            return
+
+        sorted_laps = sorted(self.lockup_lap_groups.keys())
+        try:
+            row_index = sorted_laps.index(lap_num)
+            self.lockup_table_widget.selectRow(row_index)
+        except (ValueError, AttributeError):
+            pass
+
     def get_selected_lockup_wheels(self):
         if not hasattr(self, 'lockup_wheel_toggles'):
             return ['LF', 'RF', 'LR', 'RR']  
@@ -4384,7 +4469,6 @@ class TelemetryWindow(QWidget):
                 selected.append(wheel_name)
         
         return selected if selected else ['LF', 'RF', 'LR', 'RR']
-    
     def create_lockup_stats(self, selected_laps):
         total_lockups = 0
         wheel_counts = {'LF': 0, 'RF': 0, 'LR': 0, 'RR': 0}
@@ -4397,7 +4481,7 @@ class TelemetryWindow(QWidget):
         avg_per_lap = total_lockups / len(selected_laps) if selected_laps else 0
         
         stats_container = QWidget()
-        stats_container.setFixedHeight(int(100 * self.scale_factor))
+        stats_container.setFixedHeight(int(115 * self.scale_factor))
         stats_container.setStyleSheet("""
             QWidget {
                 background-color: white;
@@ -4422,7 +4506,19 @@ class TelemetryWindow(QWidget):
         
         stats_layout.addStretch()
         
-        return stats_container
+        stats_wrapper = QWidget()
+        stats_wrapper.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 3px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        stats_wrapper_layout = QVBoxLayout(stats_wrapper)
+        stats_wrapper_layout.setContentsMargins(2, 2, 2, 2)
+        stats_wrapper_layout.addWidget(stats_container)
+
+        return stats_wrapper
 
 
     def create_stat_box(self, label, value):
@@ -4432,11 +4528,11 @@ class TelemetryWindow(QWidget):
         stat_layout.setSpacing(5)
             
         label_widget = QLabel(label)
-        label_widget.setStyleSheet("font-size: 12px; color: #6b7280; font-weight: 500;")
-            
+        label_widget.setStyleSheet("font-size: 14px; color: #6b7280; font-weight: 500;") 
+       
         value_widget = QLabel(value)
-        value_widget.setStyleSheet("font-size: 24px; color: #111827; font-weight: bold;")
-            
+        value_widget.setStyleSheet("font-size: 28px; color: #111827; font-weight: bold;") 
+   
         stat_layout.addWidget(label_widget)
         stat_layout.addWidget(value_widget)
             
@@ -5208,5 +5304,6 @@ if __name__ == "__main__":
     window.show()
     sys.exit(app.exec())"""
 
-#TODO: SORTING OF LAPS NOT WORKING PROPERLY
+#TODO: Test scrollability of all tables, meaning, record a lot of laps, perform a lot of lockups
+#TODO: Implement pitstop detection (inlap | outlap) colour them accordingly in table
 
