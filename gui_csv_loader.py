@@ -219,7 +219,7 @@ class TelemetryWindow(QWidget):
 
         # -=LEFT PANEL (SIDEBAR)=-
         left_panel = QWidget()
-        left_panel.setFixedWidth(int(320 * self.scale_factor))
+        left_panel.setFixedWidth(int(280 * self.scale_factor))
         left_panel.setStyleSheet("background-color: #e7bdc0;")
 
         left_layout = QVBoxLayout(left_panel)
@@ -257,7 +257,7 @@ class TelemetryWindow(QWidget):
             ("Fuel Usage Data", "icons/icon_Fuel.png", 5),
             ("Data Previewer", "icons/icon_Data.png", 6),
         ]
-
+ 
         for label, icon_path, page_index in nav_items:
             # Container for icon + text (shelf structure)
             item_container = QWidget()
@@ -1921,7 +1921,14 @@ class TelemetryWindow(QWidget):
     #================
     def make_tyres_page(self):
         page = QWidget()
-        layout = QVBoxLayout(page)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+    
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
 
@@ -1934,14 +1941,24 @@ class TelemetryWindow(QWidget):
         title.setAlignment(Qt.AlignLeft)
         layout.addWidget(title)
 
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(15)
+        main_content = QHBoxLayout()
+        main_content.setSpacing(15)
 
-        # left side - lap selector
+        left_column = QVBoxLayout()
+        left_column.setSpacing(10)
+
+        # Lap selector
         lap_selector_container = QWidget()
-        lap_selector_container.setFixedWidth(250)
+        lap_selector_container.setFixedWidth(int(275 * self.scale_factor))
+        lap_selector_container.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border-radius: 0px;
+                border: none;
+            }
+        """)
         lap_selector_layout = QVBoxLayout(lap_selector_container)
-        lap_selector_layout.setContentsMargins(0, 0, 0, 0)
+        lap_selector_layout.setContentsMargins(2, 2, 3, 2)
         lap_selector_layout.setSpacing(0)
 
         lap_selector_title = QLabel("Select Lap")
@@ -1949,6 +1966,7 @@ class TelemetryWindow(QWidget):
         lap_selector_layout.addWidget(lap_selector_title)
 
         self.tyre_lap_list = QListWidget()
+        self.tyre_lap_list.setMaximumHeight(int(900 * self.scale_factor))
         self.tyre_lap_list.setStyleSheet("""
             QListWidget {
                 background-color: white;
@@ -1972,7 +1990,7 @@ class TelemetryWindow(QWidget):
         """)
         self.tyre_lap_list.itemClicked.connect(self.update_tyre_data_display)
         lap_selector_layout.addWidget(self.tyre_lap_list)
-        
+
         for lap in sorted(self.lap_timings.keys()):
             lap_info = self.lap_timings[lap]
             item_text = f"Lap {lap} - {lap_info['time_str']}"
@@ -1980,14 +1998,27 @@ class TelemetryWindow(QWidget):
             item.setData(Qt.UserRole, lap)
             self.tyre_lap_list.addItem(item)
 
-        content_layout.addWidget(lap_selector_container)
+        lap_selector_wrapper = QWidget()
+        lap_selector_wrapper.setFixedWidth(int(284 * self.scale_factor))
+        lap_selector_wrapper.setFixedHeight(int(900 * self.scale_factor))
+        lap_selector_wrapper.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        lap_selector_wrapper_layout = QVBoxLayout(lap_selector_wrapper)
+        lap_selector_wrapper_layout.setContentsMargins(2, 2, 2, 2)
+        lap_selector_wrapper_layout.addWidget(lap_selector_container)
 
-        #above tyre display
-        right_container = QWidget()
-        right_layout = QVBoxLayout(right_container)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(10)
+        left_column.addWidget(lap_selector_wrapper)
 
+
+        right_column = QVBoxLayout()
+        right_column.setSpacing(10)
+
+        # top down tyreview + track map
         top_row_container = QWidget()
         top_row_layout = QHBoxLayout(top_row_container)
         top_row_layout.setContentsMargins(0, 0, 0, 0)
@@ -2003,12 +2034,18 @@ class TelemetryWindow(QWidget):
         self.tyre_map_layout.setContentsMargins(0, 0, 0, 0)
         top_row_layout.addWidget(self.tyre_map_container)
 
-        right_layout.addWidget(top_row_container)
+        right_column.addWidget(top_row_container)
 
+    
+        main_content.addLayout(left_column)
+        main_content.addLayout(right_column)
+        main_content.addStretch()
+
+        layout.addLayout(main_content) 
         bottom_row_container = QWidget()
         bottom_row_layout = QHBoxLayout(bottom_row_container)
         bottom_row_layout.setContentsMargins(0, 0, 0, 0)
-        bottom_row_layout.setSpacing(10)
+        bottom_row_layout.setSpacing(15)
 
         self.tyre_correlation_container = QWidget()
         self.tyre_correlation_layout = QVBoxLayout(self.tyre_correlation_container)
@@ -2020,15 +2057,15 @@ class TelemetryWindow(QWidget):
         self.tyre_chart_layout.setContentsMargins(0, 0, 0, 0)
         bottom_row_layout.addWidget(self.tyre_chart_container)
 
-        right_layout.addWidget(bottom_row_container)
-
-        content_layout.addWidget(right_container)
-        content_layout.addStretch()
-
-        layout.addLayout(content_layout)
+        layout.addWidget(bottom_row_container)  
         layout.addStretch()
+   
+        scroll.setWidget(content_widget)
+        
+        page_layout = QVBoxLayout(page)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        page_layout.addWidget(scroll)
 
-        #default to first lap
         if self.tyre_lap_list.count() > 0:
             self.tyre_lap_list.setCurrentRow(0)
             self.update_tyre_data_display()
@@ -2039,7 +2076,7 @@ class TelemetryWindow(QWidget):
     # i've used a wide range here as optimal tyre temps can vary heavily across different car classes
     def get_tyre_temp_color(self, temp):
         if temp < 50:
-            return '#0ea5e9'  # Blue (cold)
+            return '#0ea5e9' 
         elif temp < 65:
             #cold
             ratio = (temp - 50) / 15
@@ -2106,33 +2143,33 @@ class TelemetryWindow(QWidget):
             },
         }
                 
-        fig = Figure(figsize=(10, 8), facecolor='#f8f9fa')
+        fig = Figure(figsize=(10, 8), facecolor="#ffffff")
         ax = fig.add_subplot(111)
         
         self.tyre_top_down_ax = ax
         
         # "body" of car
-        car_body = Rectangle((2.0, 1.8), 3.5, 4.5, facecolor='#9ca3af', edgecolor='#000000', linewidth=2)
+        car_body = Rectangle((2.05, 0.8), 3.5, 6.5, facecolor='#9ca3af', edgecolor='#000000', linewidth=2)
         ax.add_patch(car_body)
         
-        # Tyre graphic dimensions
-        tyre_width = 1.5
-        tyre_height = 1.7
+        # wheel sizes
+        tyre_width = 1.6
+        tyre_height = 2.1
         segment_width = tyre_width / 3
         
-        # positioning of tyre graphics
+        # positions
         tyre_positions = [
             (0.3, 5.5, 'LF', tyres['LF']),
             (5.7, 5.5, 'RF', tyres['RF']),
-            (0.3, 0.5, 'LR', tyres['LR']),
-            (5.7, 0.5, 'RR', tyres['RR']),
+            (0.3, 0.2, 'LR', tyres['LR']),
+            (5.7, 0.2, 'RR', tyres['RR']),
         ]
         
         for x, y, label, temps in tyre_positions:
 
-            # tyre lable (RF|LF|RR|LR)
             ax.text(x + tyre_width/2, y + tyre_height + 0.3, label, 
                 ha='center', va='bottom', fontsize=14, fontweight='bold', color='#000000')
+
         
 
             for i, (segment_label, temp) in enumerate([('L', temps['L']), ('M', temps['M']), ('R', temps['R'])]):
@@ -2146,21 +2183,34 @@ class TelemetryWindow(QWidget):
                 ax.text(text_x, text_y, f'{temp:.0f}°', 
                     ha='center', va='center', fontsize=10, fontweight='bold', color='white')
         
-        ax.set_xlim(0, 8)
-        ax.set_ylim(0, 8)
+        ax.set_xlim(-0.5, 8.5)
+        ax.set_ylim(-1.0, 9.5)
         ax.set_aspect('equal')
         ax.axis('off')
+        ax.set_aspect('auto')
         ax.set_title(f'Lap {lap} - Tyre Temperatures (Live)', 
-                    fontsize=14, fontweight='bold', pad=10)
+            fontsize=19, fontweight='bold', pad=1)
         
-        fig.subplots_adjust(left=0.05, right=0.95, top=0.92, bottom=0.05)
+        fig.subplots_adjust(left=0.01, right=0.99, top=0.96, bottom=0.01)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(int(700 * self.scale_factor), int(600 * self.scale_factor))
-        
+        canvas.setFixedSize(int(800 * self.scale_factor), int(850 * self.scale_factor)) 
+
+        top_down_wrapper = QWidget()
+        top_down_wrapper.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        top_down_wrapper_layout = QVBoxLayout(top_down_wrapper)
+        top_down_wrapper_layout.setContentsMargins(2, 2, 2, 2)
+        top_down_wrapper_layout.addWidget(canvas)
+
         self.tyre_top_down_canvas = canvas
-        
-        return canvas
+
+        return top_down_wrapper
 
     def create_tyre_temp_track_map(self, lap):
         from matplotlib.figure import Figure
@@ -2180,7 +2230,7 @@ class TelemetryWindow(QWidget):
             lap_data['RRtempL'] + lap_data['RRtempM'] + lap_data['RRtempR']
         ) / 12
         
-        fig = Figure(figsize=(8, 8), facecolor='#f8f9fa')
+        fig = Figure(figsize=(8, 8), facecolor='#BFBEC1') 
         ax = fig.add_subplot(111)
         
         points = np.array([lap_data["Lon"].values, lap_data["Lat"].values]).T.reshape(-1, 1, 2)
@@ -2209,7 +2259,7 @@ class TelemetryWindow(QWidget):
                 color='black', linewidth=3, zorder=10)
         
         ax.set_title(f'Lap {lap} - Tyre Temperature Track Map',
-                    fontsize=14, fontweight='bold', pad=10)
+            fontsize=14, fontweight='bold', pad=10)
         ax.set_aspect('equal')
         ax.set_facecolor('white')
         ax.set_xticks([])
@@ -2220,9 +2270,8 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(600, 600)
+        canvas.setFixedSize(850, 850)
 
-        #DRIVER DOT
         self.tyre_driver_dot, = ax.plot(
             lap_data["Lon"].iloc[0],
             lap_data["Lat"].iloc[0],
@@ -2232,7 +2281,7 @@ class TelemetryWindow(QWidget):
         self.tyre_map_ax = ax
 
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(int(600 * self.scale_factor), int(600 * self.scale_factor))
+        canvas.setFixedSize(int(850 * self.scale_factor), int(850 * self.scale_factor)) 
 
 
         self.tyre_map_canvas = canvas
@@ -2246,14 +2295,14 @@ class TelemetryWindow(QWidget):
         import numpy as np
         
         colorbar_container = QWidget()
-        colorbar_container.setFixedWidth(120)
+        colorbar_container.setFixedWidth(int(155 * self.scale_factor))
         
         container_layout = QVBoxLayout(colorbar_container)
         container_layout.setContentsMargins(0, 0, 0, 0)
-        container_layout.setSpacing(5)
+        container_layout.setSpacing(2)
         
         title = QLabel("Temperature")
-        title.setStyleSheet("font-size: 11px; font-weight: bold; color: #111827;")
+        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: #111827;")
         title.setAlignment(Qt.AlignCenter)
         container_layout.addWidget(title)
         
@@ -2278,14 +2327,14 @@ class TelemetryWindow(QWidget):
         
         ax.set_xticks([])
         ax.set_yticks([0, 64, 128, 192, 255])
-        ax.set_yticklabels(['50°C', '65°C', '80°C', '95°C', '110°C'], fontsize=9)
+        ax.set_yticklabels(['50°C', '65°C', '80°C', '95°C', '110°C'], fontsize=12)
         
         ax.tick_params(colors='#111827', labelsize=9)
         
         fig.subplots_adjust(left=0.5, right=0.85, top=0.98, bottom=0.02)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(int(120 * self.scale_factor), int(600 * self.scale_factor))
+        canvas.setFixedSize(int(180 * self.scale_factor), int(750 * self.scale_factor))
 
         
         layout = QVBoxLayout()
@@ -2333,12 +2382,12 @@ class TelemetryWindow(QWidget):
         fig = Figure(figsize=(10, 4), facecolor='#f8f9fa')
         ax = fig.add_subplot(111)
         
-        scatter = ax.scatter(avg_temps, lap_times, s=100, c=lap_numbers, 
-                            cmap='viridis', edgecolors='black', linewidths=1.5, zorder=3)
+        scatter = ax.scatter(avg_temps, lap_times, s=int(150 * self.scale_factor), c=lap_numbers, 
+                        cmap='Pastel1', edgecolors='black', linewidths=1.3, zorder=3)
         
         for lap_num, temp, time in zip(lap_numbers, avg_temps, lap_times):
             ax.annotate(f'{lap_num}', (temp, time), 
-                    fontsize=9, fontweight='bold', ha='center', va='center')
+                fontsize=8, fontweight='bold', ha='center', va='center')
         
         if len(avg_temps) > 1:
             z = np.polyfit(avg_temps, lap_times, 1)
@@ -2360,7 +2409,7 @@ class TelemetryWindow(QWidget):
         
         ax.set_facecolor('white')
         ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
-        ax.tick_params(colors='#111827', labelsize=10)
+        ax.tick_params(colors='#111827', labelsize=int(10 * self.scale_factor))
         
         for spine in ax.spines.values():
             spine.set_edgecolor('#d1d5db')
@@ -2369,11 +2418,25 @@ class TelemetryWindow(QWidget):
         if len(avg_temps) > 1:
             ax.legend(loc='upper left', fontsize=9)
         
-        fig.subplots_adjust(left=0.10, right=0.98, top=0.90, bottom=0.15)
-        
+        fig.subplots_adjust(left=0.10, right=0.98, top=0.90, bottom=0.20)
+
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(int(300 * self.scale_factor))
-        return canvas
+        canvas.setFixedHeight(int(380 * self.scale_factor))
+        canvas.setMinimumWidth(1)
+
+        correlation_wrapper = QWidget()
+        correlation_wrapper.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        correlation_wrapper_layout = QVBoxLayout(correlation_wrapper)
+        correlation_wrapper_layout.setContentsMargins(4, 4, 4, 4)
+        correlation_wrapper_layout.addWidget(canvas)
+
+        return correlation_wrapper
     
     #Avg tyre temp through lap line chart
     def create_tyre_temp_line_chart(self, lap):
@@ -2405,9 +2468,9 @@ class TelemetryWindow(QWidget):
         ax.plot(time_seconds, rr_avg, linewidth=2, label='RR', color='#f59e0b')
         
         #Optimal temp range TODO: verify
-        ax.axhspan(75, 85, alpha=0.1, color='green', label='Optimal Range')
+        ax.axhspan(60, 80, alpha=0.1, color='green')
         
-        # sweeperline in tandem with playback positioning
+        # sweepeing line in tandem with playback positioning
         self.tyre_sweep_line = ax.axvline(x=0, color='black', linewidth=2, linestyle='-', alpha=0.7, zorder=10)
         
         ax.set_xlabel('Time (seconds)', fontsize=11, fontweight='bold', color='#111827')
@@ -2417,21 +2480,34 @@ class TelemetryWindow(QWidget):
         
         ax.set_facecolor('white')
         ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
-        ax.tick_params(colors='#111827', labelsize=10)
+        ax.tick_params(colors='#111827', labelsize=int(10 * self.scale_factor))
         ax.legend(loc='upper right', fontsize=10, framealpha=0.9)
         
         for spine in ax.spines.values():
             spine.set_edgecolor('#d1d5db')
             spine.set_linewidth(1)
         
-        fig.subplots_adjust(left=0.08, right=0.98, top=0.88, bottom=0.15)
-        
+        fig.subplots_adjust(left=0.08, right=0.98, top=0.88, bottom=0.20)
+
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(int(300 * self.scale_factor))
-        
+        canvas.setFixedHeight(int(380 * self.scale_factor))
+
         self.tyre_chart_canvas = canvas
-        
-        return canvas
+
+
+        chart_wrapper = QWidget()
+        chart_wrapper.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        chart_wrapper_layout = QVBoxLayout(chart_wrapper)
+        chart_wrapper_layout.setContentsMargins(4, 4, 4, 4)
+        chart_wrapper_layout.addWidget(canvas)
+
+        return chart_wrapper
     
     def update_tyre_data_display(self):
         current_item = self.tyre_lap_list.currentItem()
@@ -2479,11 +2555,10 @@ class TelemetryWindow(QWidget):
         
         track_map = self.create_tyre_temp_track_map(selected_lap)
         if track_map:
-            # Create horizontal layout for map + colorbar
             map_with_colorbar = QWidget()
             map_colorbar_layout = QHBoxLayout(map_with_colorbar)
             map_colorbar_layout.setContentsMargins(0, 0, 0, 0)
-            map_colorbar_layout.setSpacing(10)
+            map_colorbar_layout.setSpacing(3)
             
             map_colorbar_layout.addWidget(track_map)
             
@@ -2492,7 +2567,6 @@ class TelemetryWindow(QWidget):
             
             self.tyre_map_layout.addWidget(map_with_colorbar)
             
-            # playback controls below map
             controls = self.create_tyre_playback_controls()
             self.tyre_map_layout.addWidget(controls)
         
@@ -2512,13 +2586,13 @@ class TelemetryWindow(QWidget):
 
     def create_tyre_playback_controls(self):
         controls_widget = QWidget()
-        controls_widget.setFixedHeight(50)
+        controls_widget.setFixedHeight(int(50 * self.scale_factor))
         controls_layout = QHBoxLayout(controls_widget)
         controls_layout.setContentsMargins(5, 5, 5, 5)
         controls_layout.setSpacing(10)
 
         self.tyre_play_pause_btn = QPushButton("▶ Play")
-        self.tyre_play_pause_btn.setFixedWidth(100)
+        self.tyre_play_pause_btn.setFixedWidth(int(100 * self.scale_factor))
         self.tyre_play_pause_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2563eb;
@@ -2552,24 +2626,25 @@ class TelemetryWindow(QWidget):
         self.tyre_reset_btn.clicked.connect(self.reset_tyre_playback)
 
         speed_label = QLabel("Speed:")
-        speed_label.setStyleSheet("font-size: 14px; font-weight: bold; color: black;")
+        speed_label.setStyleSheet(f"font-size: 14px; font-weight: bold; color: black;")
 
         self.tyre_speed_selector = QComboBox()
         self.tyre_speed_selector.addItem("1x", 1)
         self.tyre_speed_selector.addItem("2x", 2)
         self.tyre_speed_selector.addItem("4x", 4)
         self.tyre_speed_selector.addItem("8x", 8)
-        self.tyre_speed_selector.setFixedWidth(70)
+        self.tyre_speed_selector.setFixedWidth(int(70 * self.scale_factor))
         self.tyre_speed_selector.setStyleSheet("""
             QComboBox {
-                font-size: 14px;
+                font-size: {int(14 * self.scale_factor)}px;
                 color: black;
                 padding: 3px;
             }
         """)
 
         self.tyre_playback_time_label = QLabel("0.000s / 0.000s")
-        self.tyre_playback_time_label.setStyleSheet("font-size: 14px; color: black; font-weight: bold;")
+        self.tyre_playback_time_label.setStyleSheet(f"font-size: 14px; color: black; font-weight: bold;")
+
 
         controls_layout.addWidget(self.tyre_play_pause_btn)
         controls_layout.addWidget(self.tyre_reset_btn)
@@ -2606,7 +2681,6 @@ class TelemetryWindow(QWidget):
         self.tyre_current_tick = 0
 
         if hasattr(self, 'current_tyre_lap_data') and self.current_tyre_lap_data is not None:
-            # Reset driver dot on map
             if hasattr(self, 'tyre_driver_dot') and hasattr(self, 'tyre_map_canvas'):
                 self.tyre_driver_dot.set_data(
                     [self.current_tyre_lap_data["Lon"].iloc[0]],
@@ -2623,7 +2697,6 @@ class TelemetryWindow(QWidget):
             total_time = (lap_end_tick - lap_start_tick) / 60
             self.tyre_playback_time_label.setText(f"0.000s / {total_time:.3f}s")
 
-            # Update top-down with initial temps
             self.update_tyre_top_down_live(self.current_tyre_lap_data.iloc[0])
 
     def tyre_playback_step(self):
@@ -2657,7 +2730,6 @@ class TelemetryWindow(QWidget):
             self.tyre_playback_index = tick_diffs.idxmin()
             current_row = self.current_tyre_lap_data.loc[self.tyre_playback_index]
 
-        # Update driver dot position on map
         if hasattr(self, 'tyre_driver_dot'):
             self.tyre_driver_dot.set_data([current_row["Lon"]], [current_row["Lat"]])
             self.tyre_map_canvas.draw_idle()
@@ -2667,10 +2739,8 @@ class TelemetryWindow(QWidget):
             self.tyre_sweep_line.set_xdata([current_time_seconds, current_time_seconds])
             self.tyre_chart_canvas.draw_idle()
 
-        #tyre temp graphic update
         self.update_tyre_top_down_live(current_row)
 
-        # time lable update
         current_time_seconds = self.tyre_current_tick / ticks_per_second
         total_lap_time = total_lap_ticks / ticks_per_second
         self.tyre_playback_time_label.setText(f"{current_time_seconds:.3f}s / {total_lap_time:.3f}s")
@@ -2712,23 +2782,24 @@ class TelemetryWindow(QWidget):
             },
         }
 
-        tyre_width = 1.5
-        tyre_height = 1.7
+        #reminder: ensure that tyre sizes and positioning align with non update method above
+        tyre_width = 1.6
+        tyre_height = 2.1
         segment_width = tyre_width / 3
         
+
         tyre_positions = [
             (0.3, 5.5, 'LF', tyres['LF']),  
             (5.7, 5.5, 'RF', tyres['RF']),  
-            (0.3, 0.5, 'LR', tyres['LR']),  
-            (5.7, 0.5, 'RR', tyres['RR']),  
+            (0.3, 0.2, 'LR', tyres['LR']),  
+            (5.7, 0.2, 'RR', tyres['RR']),  
         ]
         
         for x, y, label, temps in tyre_positions:
-            # Label above tyre
             ax.text(x + tyre_width/2, y + tyre_height + 0.3, label, 
                 ha='center', va='bottom', fontsize=14, fontweight='bold', color='#000000')
+
             
-            # segmentation (Outer|Middle|Centre)
             for i, (segment_label, temp) in enumerate([('L', temps['L']), ('M', temps['M']), ('R', temps['R'])]):
                 color = self.get_tyre_temp_color(temp)
                 segment = Rectangle((x + i * segment_width, y), segment_width, tyre_height, 
@@ -2738,7 +2809,7 @@ class TelemetryWindow(QWidget):
                 text_x = x + i * segment_width + segment_width/2
                 text_y = y + tyre_height/2
                 ax.text(text_x, text_y, f'{temp:.0f}°', 
-                    ha='center', va='center', fontsize=10, fontweight='bold', color='white')  
+                    ha='center', va='center', fontsize=10, fontweight='bold', color='white')
 
         
         self.tyre_top_down_canvas.draw_idle()
@@ -2777,6 +2848,7 @@ class TelemetryWindow(QWidget):
 
         lap_selector_container = QWidget()
         lap_selector_container.setFixedWidth(250)
+        lap_selector_container.setMaximumHeight(int(800 * self.scale_factor))
         lap_selector_layout = QVBoxLayout(lap_selector_container)
         lap_selector_layout.setContentsMargins(0, 0, 0, 0)
         lap_selector_layout.setSpacing(0)
@@ -3843,7 +3915,7 @@ class TelemetryWindow(QWidget):
 
         
         lap_selector_container = QWidget()
-        lap_selector_container.setFixedWidth(int(250 * self.scale_factor)) 
+        lap_selector_container.setFixedWidth(int(250 * self.scale_factor))  
         lap_selector_container.setStyleSheet("""
             QWidget {
                 background-color: white;
@@ -4828,7 +4900,7 @@ class TelemetryWindow(QWidget):
             spine.set_edgecolor('#d1d5db')
             spine.set_linewidth(1)
         
-        fig.subplots_adjust(left=0.10, right=0.98, top=0.92, bottom=0.12)
+        fig.subplots_adjust(left=0.10, right=0.98, top=0.90, bottom=0.15)
         
         canvas = FigureCanvas(fig)
         canvas.setFixedHeight(int(400 * self.scale_factor))
@@ -5030,7 +5102,7 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.10, right=0.98, top=0.90, bottom=0.15)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(int(300 * self.scale_factor))
+        canvas.setFixedHeight(int(450 * self.scale_factor))
         return canvas
 
     def create_fuel_track_map(self, lap):
