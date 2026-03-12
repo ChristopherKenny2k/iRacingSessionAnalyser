@@ -4715,6 +4715,8 @@ class TelemetryWindow(QWidget):
 
         layout.addWidget(top_row_container)
 
+        layout.addSpacing(20)  
+
         self.fuel_correlation_container = QWidget()
         self.fuel_correlation_layout = QVBoxLayout(self.fuel_correlation_container)
         self.fuel_correlation_layout.setContentsMargins(0, 0, 0, 0)
@@ -4769,7 +4771,7 @@ class TelemetryWindow(QWidget):
         least_used_kg = least_used_l * FUEL_DENSITY
         
         stats_container = QWidget()
-        stats_container.setFixedHeight(int(80 * self.scale_factor))
+        stats_container.setFixedHeight(int(200 * self.scale_factor))
         stats_container.setStyleSheet("""
             QWidget {
                 background-color: white;
@@ -4926,7 +4928,7 @@ class TelemetryWindow(QWidget):
         laps = list(lap_usage.keys())
         usages = list(lap_usage.values())
         
-        fig = Figure(figsize=(10, 5), facecolor='#f8f9fa')
+        fig = Figure(figsize=(10, 9), facecolor='#f8f9fa')
         ax = fig.add_subplot(111)
 
         self.fuel_bar_ax = ax
@@ -4972,10 +4974,10 @@ class TelemetryWindow(QWidget):
             spine.set_edgecolor('#d1d5db')
             spine.set_linewidth(1)
         
-        fig.subplots_adjust(left=0.10, right=0.98, top=0.92, bottom=0.12)
+        fig.subplots_adjust(left=0.10, right=0.98, top=0.92, bottom=0.10)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(int(400 * self.scale_factor))
+        canvas.setFixedHeight(int(600 * self.scale_factor))
         
         canvas.mpl_connect('motion_notify_event', self.on_fuel_bar_hover)
         canvas.mpl_connect('button_press_event', self.on_fuel_bar_click)
@@ -5061,7 +5063,7 @@ class TelemetryWindow(QWidget):
         if len(lap_times) == 0:
             return None
         
-        fig = Figure(figsize=(10, 4), facecolor='#f8f9fa')
+        fig = Figure(figsize=(10, 5), facecolor='#f8f9fa')
         ax = fig.add_subplot(111)
         
         scatter = ax.scatter(fuel_loads, lap_times, s=100, c=lap_numbers, 
@@ -5189,7 +5191,7 @@ class TelemetryWindow(QWidget):
             fontsize=12, fontweight='bold', color='#111827')
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(int(600 * self.scale_factor), int(600 * self.scale_factor))
+        canvas.setFixedSize(int(750 * self.scale_factor), int(750 * self.scale_factor))
 
         return canvas
 
