@@ -253,7 +253,7 @@ class TelemetryWindow(QWidget):
             ("Timing Data", "icons/icon_Timings.png", 1),
             ("Pedal Usage Data", "icons/icon_Pedals.png", 2),
             ("Lock-up Data", "icons/icon_Brakes.png", 3), 
-            ("Tire Data", "icons/icon_Tyre.png", 4),
+            ("Tyre Data", "icons/icon_Tyre.png", 4),
             ("Fuel Usage Data", "icons/icon_Fuel.png", 5),
             ("Data Previewer", "icons/icon_Data.png", 6),
         ]
@@ -458,7 +458,6 @@ class TelemetryWindow(QWidget):
         perp_dx = -dy
         perp_dy = dx
 
-        # Scaling for this perpendicular line 
         length = np.sqrt(perp_dx**2 + perp_dy**2)
         if length > 0:
             perp_dx = perp_dx / length * 0.0003
@@ -1118,7 +1117,8 @@ class TelemetryWindow(QWidget):
 
     def create_map_legend(self, items, title):
         legend_widget = QWidget()
-        legend_widget.setFixedWidth(150)
+        legend_widget.setFixedWidth(int(150 * self.scale_factor))
+        legend_widget.setFixedHeight(int(350 * self.scale_factor)) 
         legend_widget.setStyleSheet("""
             QWidget {
                 background-color: #f8f9fa;
@@ -1949,7 +1949,7 @@ class TelemetryWindow(QWidget):
 
         # Lap selector
         lap_selector_container = QWidget()
-        lap_selector_container.setFixedWidth(int(275 * self.scale_factor))
+        lap_selector_container.setFixedWidth(int(280 * self.scale_factor))
         lap_selector_container.setStyleSheet("""
             QWidget {
                 background-color: white;
@@ -2589,7 +2589,7 @@ class TelemetryWindow(QWidget):
         controls_widget.setFixedHeight(int(50 * self.scale_factor))
         controls_layout = QHBoxLayout(controls_widget)
         controls_layout.setContentsMargins(5, 5, 5, 5)
-        controls_layout.setSpacing(10)
+        controls_layout.setSpacing(int(10 * self.scale_factor))
 
         self.tyre_play_pause_btn = QPushButton("▶ Play")
         self.tyre_play_pause_btn.setFixedWidth(int(100 * self.scale_factor))
@@ -2821,13 +2821,11 @@ class TelemetryWindow(QWidget):
     #================
     def make_pedals_page(self):
         page = QWidget()
-
         
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        
         
         content_widget = QWidget()
         layout = QVBoxLayout(content_widget)  
@@ -2843,19 +2841,25 @@ class TelemetryWindow(QWidget):
         title.setAlignment(Qt.AlignLeft)
         layout.addWidget(title)
 
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(int(1 * self.scale_factor))
+        main_row = QHBoxLayout()
+        main_row.setSpacing(int(15 * self.scale_factor))
 
         lap_selector_container = QWidget()
-        lap_selector_container.setFixedWidth(250)
-        lap_selector_container.setMaximumHeight(int(800 * self.scale_factor))
+        lap_selector_container.setFixedWidth(int(280 * self.scale_factor))
+        lap_selector_container.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border-radius: 0px;
+                border: none;
+            }
+        """)
         lap_selector_layout = QVBoxLayout(lap_selector_container)
         lap_selector_layout.setContentsMargins(0, 0, 0, 0)
         lap_selector_layout.setSpacing(0)
 
         order_layout = QHBoxLayout()
         order_label = QLabel("Order by:")
-        order_label.setStyleSheet("font-size: 22px; color: black; font-weight: bold;")
+        order_label.setStyleSheet("font-size: 18px; color: black; font-weight: bold;")
 
         self.lap_order_selector = QComboBox()
         self.lap_order_selector.addItem("Chronological", "chronological")
@@ -2865,7 +2869,16 @@ class TelemetryWindow(QWidget):
             QComboBox {
                 font-size: 16px;
                 color: black;
+                background-color: white;
                 padding: 5px;
+                border: 1px solid #d1d5db; 
+                border-radius: 4px;
+            }
+            QComboBox QAbstractItemView {
+                color: black;
+                background-color: white;
+                selection-background-color: #2563eb;
+                selection-color: white;
             }
         """)
         self.lap_order_selector.currentIndexChanged.connect(self.update_lap_list)
@@ -2899,32 +2912,30 @@ class TelemetryWindow(QWidget):
         self.lap_list.itemClicked.connect(self.update_pedal_track_map_from_list)
         lap_selector_layout.addWidget(self.lap_list)
 
-        # === RIGHT SIDE widget ===
-        right_container = QWidget()
-        right_layout = QVBoxLayout(right_container)
-        right_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(0)
+        lap_selector_wrapper = QWidget()
+        lap_selector_wrapper.setFixedWidth(int(284 * self.scale_factor))
+        lap_selector_wrapper.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        lap_selector_wrapper_layout = QVBoxLayout(lap_selector_wrapper)
+        lap_selector_wrapper_layout.setContentsMargins(2, 2, 2, 2)
+        lap_selector_wrapper_layout.setAlignment(Qt.AlignTop)
+        lap_selector_wrapper_layout.addWidget(lap_selector_container)
 
-        # Container for track map AND speed display
-        self.map_speed_container = QWidget()
-        map_speed_layout = QHBoxLayout(self.map_speed_container)
-        map_speed_layout.setContentsMargins(0, 0, 0, 0)
-        map_speed_layout.setSpacing(0)
-        map_speed_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        main_row.addWidget(lap_selector_wrapper)
 
-        # Left side: map container with toggle
-        map_with_toggle = QWidget()
-        map_with_toggle_layout = QVBoxLayout(map_with_toggle)
-        map_with_toggle_layout.setContentsMargins(0, 0, 0, 0)
-        map_with_toggle_layout.setSpacing(0)
+        map_column = QVBoxLayout()
+        map_column.setSpacing(int(5 * self.scale_factor))
 
-        #Gear/Throttle toggle
         toggle_container = QWidget()
-        toggle_container.setFixedHeight(40)
+        toggle_container.setFixedHeight(int(40 * self.scale_factor))
         toggle_layout = QHBoxLayout(toggle_container)
         toggle_layout.setContentsMargins(0, 0, 0, 0)
-        toggle_layout.setSpacing(10)  
+        toggle_layout.setSpacing(10)
 
         toggle_label = QLabel("Map View:")
         toggle_label.setStyleSheet("font-size: 12px; color: black; font-weight: bold;")
@@ -2935,8 +2946,8 @@ class TelemetryWindow(QWidget):
         self.map_mode_throttle.setCheckable(True)
         self.map_mode_gear.setCheckable(True)
         self.map_mode_throttle.setChecked(True)
-        self.map_mode_throttle.setFixedSize(110, 30)
-        self.map_mode_gear.setFixedSize(70, 30)
+        self.map_mode_throttle.setFixedSize(int(110 * self.scale_factor), int(30 * self.scale_factor))
+        self.map_mode_gear.setFixedSize(int(70 * self.scale_factor), int(30 * self.scale_factor))
 
         map_toggle_style = """
             QPushButton {
@@ -2969,31 +2980,28 @@ class TelemetryWindow(QWidget):
         toggle_layout.addWidget(self.map_mode_gear)
         toggle_layout.addStretch()
 
-        map_with_toggle_layout.addWidget(toggle_container)
+        map_column.addWidget(toggle_container)
 
-        # Track map container (below toggle)
+        map_content_row = QHBoxLayout()
+        map_content_row.setSpacing(int(50 * self.scale_factor))
+
         self.pedal_map_container = QWidget()
+        self.pedal_map_container.setFixedWidth(int(1000 * self.scale_factor))
         self.pedal_map_layout = QVBoxLayout(self.pedal_map_container)
-        self.pedal_map_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.pedal_map_layout.setContentsMargins(0, 0, 0, 0)
         self.pedal_map_layout.setSpacing(0)
+        map_content_row.addWidget(self.pedal_map_container)
 
-        map_with_toggle_layout.addWidget(self.pedal_map_container)
+        right_side_column = QVBoxLayout()
+        right_side_column.setSpacing(int(10 * self.scale_factor))
+        right_side_column.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        right_side_column.setContentsMargins(int(45 * self.scale_factor), 0, 0, 0)
 
-        # Right side: legend + speed display stacked vertically
-        right_side_container = QWidget()
-        right_side_layout = QVBoxLayout(right_side_container)
-        right_side_layout.setContentsMargins(0, 40, 0, 0)  
-        right_side_layout.setSpacing(10)
-        right_side_layout.setAlignment(Qt.AlignTop)
-
-    
         self.legend_placeholder = QWidget()
         self.legend_placeholder_layout = QVBoxLayout(self.legend_placeholder)
         self.legend_placeholder_layout.setContentsMargins(0, 0, 0, 0)
-        right_side_layout.addWidget(self.legend_placeholder)
+        right_side_column.addWidget(self.legend_placeholder)
 
-        # Speed display box
         self.speed_display_widget = QWidget()
         self.speed_display_widget.setFixedHeight(int(150 * self.scale_factor))
         self.speed_display_widget.setFixedWidth(int(150 * self.scale_factor))
@@ -3024,8 +3032,8 @@ class TelemetryWindow(QWidget):
         self.speed_unit_kmh.setCheckable(True)
         self.speed_unit_mph.setCheckable(True)
         self.speed_unit_kmh.setChecked(True)
-        self.speed_unit_kmh.setFixedSize(55, 25)
-        self.speed_unit_mph.setFixedSize(55, 25)
+        self.speed_unit_kmh.setFixedSize(int(55 * self.scale_factor), int(25 * self.scale_factor))
+        self.speed_unit_mph.setFixedSize(int(55 * self.scale_factor), int(25 * self.scale_factor))
 
         toggle_style = """
             QPushButton {
@@ -3059,15 +3067,22 @@ class TelemetryWindow(QWidget):
 
         speed_display_layout.addLayout(unit_row)
 
-        right_side_layout.addWidget(self.speed_display_widget)
-        right_side_layout.addStretch()
+        right_side_column.addWidget(self.speed_display_widget)
 
-        map_speed_layout.addWidget(map_with_toggle)
-        map_speed_layout.addWidget(right_side_container)
+        self.pedal_graph_container = QWidget()
+        self.pedal_graph_layout = QVBoxLayout(self.pedal_graph_container)
+        self.pedal_graph_layout.setContentsMargins(0, 0, 0, 0)
+        right_side_column.addWidget(self.pedal_graph_container)
 
-        right_layout.addWidget(self.map_speed_container)
+        self.gear_graph_container = QWidget()
+        self.gear_graph_layout = QVBoxLayout(self.gear_graph_container)
+        self.gear_graph_layout.setContentsMargins(0, 0, 0, 0)
+        right_side_column.addWidget(self.gear_graph_container)
 
-        # Playback controls
+        map_content_row.addLayout(right_side_column)
+
+        map_column.addLayout(map_content_row)
+
         controls_widget = QWidget()
         controls_widget.setFixedHeight(50)
         controls_layout = QHBoxLayout(controls_widget)
@@ -3075,7 +3090,7 @@ class TelemetryWindow(QWidget):
         controls_layout.setSpacing(10)
 
         self.play_pause_btn = QPushButton("▶ Play")
-        self.play_pause_btn.setFixedWidth(100)
+        self.play_pause_btn.setFixedWidth(int(100 * self.scale_factor))
         self.play_pause_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2563eb;
@@ -3092,7 +3107,7 @@ class TelemetryWindow(QWidget):
         self.play_pause_btn.clicked.connect(self.toggle_playback)
 
         self.reset_btn = QPushButton("↺ Reset")
-        self.reset_btn.setFixedWidth(100)
+        self.reset_btn.setFixedWidth(int(100 * self.scale_factor))
         self.reset_btn.setStyleSheet("""
             QPushButton {
                 background-color: #6b7280;
@@ -3108,15 +3123,15 @@ class TelemetryWindow(QWidget):
         """)
         self.reset_btn.clicked.connect(self.reset_playback)
 
-        speed_label = QLabel("Speed:")
-        speed_label.setStyleSheet("font-size: 14px; font-weight: bold; color: black;")
+        speed_label_ctrl = QLabel("Speed:")
+        speed_label_ctrl.setStyleSheet("font-size: 14px; font-weight: bold; color: black;")
 
         self.speed_selector = QComboBox()
         self.speed_selector.addItem("1x", 1)
         self.speed_selector.addItem("2x", 2)
         self.speed_selector.addItem("4x", 4)
         self.speed_selector.addItem("8x", 8)
-        self.speed_selector.setFixedWidth(70)
+        self.speed_selector.setFixedWidth(int(70 * self.scale_factor))
         self.speed_selector.setStyleSheet("""
             QComboBox {
                 font-size: 14px;
@@ -3130,34 +3145,18 @@ class TelemetryWindow(QWidget):
 
         controls_layout.addWidget(self.play_pause_btn)
         controls_layout.addWidget(self.reset_btn)
-        controls_layout.addWidget(speed_label)
+        controls_layout.addWidget(speed_label_ctrl)
         controls_layout.addWidget(self.speed_selector)
         controls_layout.addWidget(self.playback_time_label)
         controls_layout.addStretch()
 
-        right_layout.addWidget(controls_widget)
+        map_column.addWidget(controls_widget)
 
-        # Pedal graph container
-        self.pedal_graph_container = QWidget()
-        self.pedal_graph_layout = QVBoxLayout(self.pedal_graph_container)
-        self.pedal_graph_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.addWidget(self.pedal_graph_container)
+        main_row.addLayout(map_column)
 
-        # Gear graph container
-        self.gear_graph_container = QWidget()
-        self.gear_graph_layout = QVBoxLayout(self.gear_graph_container)
-        self.gear_graph_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.addWidget(self.gear_graph_container)
-
-        # Add both sides to content layout
-        content_layout.addWidget(lap_selector_container)
-        content_layout.addWidget(right_container)
-        content_layout.addStretch()
-
-        layout.addLayout(content_layout)
+        layout.addLayout(main_row)
         layout.addStretch()
 
-        # Playback state
         self.playback_index = 0
         self.playback_active = False
         self.playback_timer = QTimer()
@@ -3166,20 +3165,17 @@ class TelemetryWindow(QWidget):
         self.playback_interval = 100
         self.lap_data_dict = {}
 
-        # Get valid laps
         valid_laps = sorted(self.telemetry_df[self.telemetry_df["Lap"] > 0]["Lap"].unique())
 
         for lap in valid_laps:
-            # Get lap time from the NEXT lap's LapLastLapTime
             lap_times = self.telemetry_df[
                 (self.telemetry_df["Lap"] == lap + 1) &
                 (self.telemetry_df["LapLastLapTime"] > 0)
             ]["LapLastLapTime"]
 
             if len(lap_times) > 0:
-                lap_time = lap_times.iloc[-1]  # Use last value
+                lap_time = lap_times.iloc[-1]
             else:
-                # Next lap doesn't exist - calculate from SessionTick
                 lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap]
                 if len(lap_data) > 1:
                     lap_time = (lap_data["SessionTick"].iloc[-1] - lap_data["SessionTick"].iloc[0]) / 60
@@ -3202,7 +3198,7 @@ class TelemetryWindow(QWidget):
                     'time_str': 'N/A'
                 }
 
-        # Remove the last lap (incomplete cooldown lap) from display
+        # remove the last lap (incomplete cooldown lap) from display
         if len(self.lap_data_dict) > 0:
             last_lap = max(self.lap_data_dict.keys())
             if last_lap in self.lap_data_dict:
@@ -3215,11 +3211,10 @@ class TelemetryWindow(QWidget):
             self.update_pedal_track_map_from_list()
         
         scroll.setWidget(content_widget)
-    
+
         page_layout = QVBoxLayout(page)
         page_layout.setContentsMargins(0, 0, 0, 0)
         page_layout.addWidget(scroll)
-
 
         return page
 
@@ -3239,7 +3234,6 @@ class TelemetryWindow(QWidget):
             self.map_mode_throttle.setChecked(False)
             self.map_mode_gear.setChecked(True)
         
-        # Redraw the map with new colours
         current_item = self.lap_list.currentItem()
         if current_item:
             selected_lap = current_item.data(Qt.UserRole)
@@ -3279,7 +3273,7 @@ class TelemetryWindow(QWidget):
         import numpy as np
         from matplotlib.collections import LineCollection
 
-        # Stop any active playback
+        # Stop 
         self.playback_timer.stop()
         self.playback_active = False
         self.play_pause_btn.setText("▶ Play")
@@ -3319,7 +3313,6 @@ class TelemetryWindow(QWidget):
 
         lap_data = lap_data.sort_values("SessionTick").reset_index(drop=True)
 
-        # DEBUG: Check for gaps in SessionTick
         print(f"\n=== Lap {selected_lap} Data Analysis ===")
         print(f"Total rows: {len(lap_data)}")
         print(f"SessionTick range: {lap_data['SessionTick'].min()} to {lap_data['SessionTick'].max()}")
@@ -3331,7 +3324,6 @@ class TelemetryWindow(QWidget):
                 print(f"  Row {idx}: gap of {gap} ticks")
         print(f"IsOnTrackCar values: {lap_data['IsOnTrackCar'].value_counts().to_dict()}")
 
-        # Store for playback
         self.current_lap_data = lap_data
         self.playback_index = 0
 
@@ -3346,7 +3338,6 @@ class TelemetryWindow(QWidget):
 
         self.playback_time_label.setText(f"0.000s / {lap_time_val:.3f}s")
 
-        # ===== STATIC TRACK MAP =====
         fig_map = Figure(figsize=(15, 10), facecolor='#bfbec1')
         ax_map = fig_map.add_subplot(111)
 
@@ -3360,7 +3351,6 @@ class TelemetryWindow(QWidget):
 
         colors = []
 
-        # Check which mode is active
         if self.map_mode_throttle.isChecked():
             # Throttle/Brake colouring
             for i in range(len(throttle) - 1):
@@ -3439,11 +3429,11 @@ class TelemetryWindow(QWidget):
         ax_map.set_yticks([])
         ax_map.set_xlim(lap_data["Lon"].min() - 0.0005, lap_data["Lon"].max() + 0.0005)
         ax_map.set_ylim(lap_data["Lat"].min() - 0.0005, lap_data["Lat"].max() + 0.0005)
-        fig_map.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02)
+        fig_map.subplots_adjust(left=0.01, right=0.99, top=0.98, bottom=0.01)
 
 
         self.map_canvas = ZoomableCanvas(fig_map)
-        self.map_canvas.setFixedSize(int(780 * self.scale_factor), int(780 * self.scale_factor))
+        self.map_canvas.setFixedSize(int(1000 * self.scale_factor), int(1000 * self.scale_factor))
 
         self.map_ax = ax_map
 
@@ -3568,10 +3558,10 @@ class TelemetryWindow(QWidget):
         self.throttle_line, = self.pedal_ax.plot([], [], color='#04ff00', linewidth=1)
         self.brake_line, = self.pedal_ax.plot([], [], color='#ff0000', linewidth=1)
 
-        fig_pedal.subplots_adjust(left=0.08, right=0.98, top=0.90, bottom=0.25)
+        fig_pedal.subplots_adjust(left=0.065, right=0.98, top=0.90, bottom=0.25)
 
         self.pedal_canvas = FigureCanvas(fig_pedal)
-        self.pedal_canvas.setFixedSize(int(960 * self.scale_factor), int(320 * self.scale_factor))
+        self.pedal_canvas.setFixedSize(int(1100 * self.scale_factor), int(375 * self.scale_factor))
         self.pedal_graph_layout.addWidget(self.pedal_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
 
         self.playback_time_data = []
@@ -3609,10 +3599,10 @@ class TelemetryWindow(QWidget):
 
         self.gear_line, = self.gear_ax.plot([], [], color='#05f7ef', linewidth=1)
 
-        fig_gear.subplots_adjust(left=0.08, right=0.98, top=0.90, bottom=0.15)
+        fig_gear.subplots_adjust(left=0.065, right=0.98, top=0.90, bottom=0.19)
 
         self.gear_canvas = FigureCanvas(fig_gear)
-        self.gear_canvas.setFixedSize(int(960* self.scale_factor), int(280 * self.scale_factor))
+        self.gear_canvas.setFixedSize(int(1100* self.scale_factor), int(300 * self.scale_factor))
         self.gear_graph_layout.addWidget(self.gear_canvas, alignment=Qt.AlignTop | Qt.AlignLeft)
 
         self.playback_gear_data = []
@@ -4659,7 +4649,7 @@ class TelemetryWindow(QWidget):
         toggle_container = QWidget()
         toggle_layout = QHBoxLayout(toggle_container)
         toggle_layout.setContentsMargins(0, 0, 0, 0)
-        toggle_layout.setSpacing(10)
+        toggle_layout.setSpacing(int(10 * self.scale_factor))
 
         toggle_label = QLabel("View:")
         toggle_label.setStyleSheet("font-size: 12px; color: black; font-weight: bold;")
@@ -4771,7 +4761,7 @@ class TelemetryWindow(QWidget):
         least_used_kg = least_used_l * FUEL_DENSITY
         
         stats_container = QWidget()
-        stats_container.setFixedHeight(int(200 * self.scale_factor))
+        stats_container.setFixedHeight(int(120 * self.scale_factor))
         stats_container.setStyleSheet("""
             QWidget {
                 background-color: white;
@@ -4799,10 +4789,10 @@ class TelemetryWindow(QWidget):
             stat_layout.setSpacing(2)
             
             label_widget = QLabel(label)
-            label_widget.setStyleSheet("font-size: 11px; color: #6b7280; font-weight: 500;")
+            label_widget.setStyleSheet("font-size: 18px; color: #6b7280; font-weight: bold;")
             
             value_widget = QLabel(value)
-            value_widget.setStyleSheet("font-size: 18px; color: #111827; font-weight: bold;")
+            value_widget.setStyleSheet("font-size: 20px; color: #111827; font-weight: bold;")
             
             stat_layout.addWidget(label_widget)
             stat_layout.addWidget(value_widget)
@@ -4811,7 +4801,19 @@ class TelemetryWindow(QWidget):
         
         stats_layout.addStretch()
         
-        return stats_container
+        stats_wrapper = QWidget()
+        stats_wrapper.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        stats_wrapper_layout = QVBoxLayout(stats_wrapper)
+        stats_wrapper_layout.setContentsMargins(2, 2, 2, 2)
+        stats_wrapper_layout.addWidget(stats_container)
+        
+        return stats_wrapper
 
     def toggle_fuel_chart(self, mode):
         if mode == "line":
@@ -4905,8 +4907,21 @@ class TelemetryWindow(QWidget):
         fig.subplots_adjust(left=0.10, right=0.98, top=0.90, bottom=0.15)
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedHeight(int(400 * self.scale_factor))
-        return canvas
+        canvas.setFixedHeight(int(600 * self.scale_factor))
+
+        line_chart_wrapper = QWidget()
+        line_chart_wrapper.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        line_chart_wrapper_layout = QVBoxLayout(line_chart_wrapper)
+        line_chart_wrapper_layout.setContentsMargins(3, 3, 3, 3)
+        line_chart_wrapper_layout.addWidget(canvas)
+
+        return line_chart_wrapper
 
     def create_fuel_usage_bar_chart(self):
         from matplotlib.figure import Figure
@@ -4981,12 +4996,24 @@ class TelemetryWindow(QWidget):
         
         canvas.mpl_connect('motion_notify_event', self.on_fuel_bar_hover)
         canvas.mpl_connect('button_press_event', self.on_fuel_bar_click)
-        
+
         self.fuel_bar_canvas = canvas
-        
-        return canvas
+
+        bar_chart_wrapper = QWidget()
+        bar_chart_wrapper.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        bar_chart_wrapper_layout = QVBoxLayout(bar_chart_wrapper)
+        bar_chart_wrapper_layout.setContentsMargins(3, 3, 3, 3)
+        bar_chart_wrapper_layout.addWidget(canvas)
+
+        return bar_chart_wrapper 
     
-    #ligthen colour of bar when hovered for lap selection
+    #on hover of bar lighten colour
     def on_fuel_bar_hover(self, event):
         if not hasattr(self, 'fuel_bars') or event.inaxes != self.fuel_bar_ax:
             return
@@ -5105,7 +5132,21 @@ class TelemetryWindow(QWidget):
         
         canvas = FigureCanvas(fig)
         canvas.setFixedHeight(int(450 * self.scale_factor))
-        return canvas
+
+        # Wrap in border
+        correlation_wrapper = QWidget()
+        correlation_wrapper.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        correlation_wrapper_layout = QVBoxLayout(correlation_wrapper)
+        correlation_wrapper_layout.setContentsMargins(3, 3, 3, 3)
+        correlation_wrapper_layout.addWidget(canvas)
+
+        return correlation_wrapper
 
     def create_fuel_track_map(self, lap):
         from matplotlib.figure import Figure
@@ -5134,7 +5175,7 @@ class TelemetryWindow(QWidget):
         
         fuel_rate.append(fuel_rate[-1] if fuel_rate else 0) 
         
-        fig = Figure(figsize=(8, 8), facecolor='#f8f9fa')
+        fig = Figure(figsize=(8, 8), facecolor='#BFBEC1')
         ax = fig.add_subplot(111)
         
         points = np.array([lap_data["Lon"].values, lap_data["Lat"].values]).T.reshape(-1, 1, 2)
@@ -5181,7 +5222,7 @@ class TelemetryWindow(QWidget):
         ax.set_xlim(lap_data["Lon"].min() - 0.0005, lap_data["Lon"].max() + 0.0005)
         ax.set_ylim(lap_data["Lat"].min() - 0.0005, lap_data["Lat"].max() + 0.0005)
         
-        fig.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02)
+        fig.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.001)
         
         FUEL_DENSITY = 0.75
         fuel_used_kg = total_fuel_used * FUEL_DENSITY
@@ -5191,7 +5232,7 @@ class TelemetryWindow(QWidget):
             fontsize=12, fontweight='bold', color='#111827')
         
         canvas = FigureCanvas(fig)
-        canvas.setFixedSize(int(750 * self.scale_factor), int(750 * self.scale_factor))
+        canvas.setFixedSize(int(800 * self.scale_factor), int(800 * self.scale_factor))
 
         return canvas
 
@@ -5327,7 +5368,6 @@ class CSVLoader(QWidget):
         self.telemetry_window = TelemetryWindow(session_info, telemetry_df, session_type)
         self.telemetry_window.setWindowFlags(Qt.Window)
         
-        # Show it first (this assigns it to a screen)
         self.telemetry_window.showMaximized()
         
         # NOW detect the screen and update scale factor
