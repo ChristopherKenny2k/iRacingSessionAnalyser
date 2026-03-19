@@ -439,22 +439,15 @@ class TelemetryWindow(QWidget):
 
         # Plot the track TODO: potentially add some UI which allows user to alter the colours for preference
         ax.plot(selected_lap_data["Lon"], selected_lap_data["Lat"], 
-            color='#2563eb', linewidth=3.5)
+            color='#222222', linewidth=3.5)
 
         # Here i add a red line perpendicular to the direction of the first two coordinates on the lap, while this could be achieved to a more accurate degree by taking the last point of the previous lap, doing it like this is adequate as the ibt file enters a row of data for every tick in the session, so even when downscaled, this is still accurate enough to be used on my map
-        # first point of lap
         start_lon = selected_lap_data["Lon"].iloc[0]
         start_lat = selected_lap_data["Lat"].iloc[0]
-
-        # second pont of the lap
         second_lon = selected_lap_data["Lon"].iloc[1]
         second_lat = selected_lap_data["Lat"].iloc[1]
-
-        # calculating the direction of the line between these 2 points
         dx = second_lon - start_lon
         dy = second_lat - start_lat
-
-        # Calculating the perpendicular line
         perp_dx = -dy
         perp_dy = dx
 
@@ -468,7 +461,7 @@ class TelemetryWindow(QWidget):
                 [start_lat - perp_dy, start_lat + perp_dy],
                 color='red', linewidth=2.5, zorder=10)
     
-        # Extra function for capitalising the title of the track, and ensuring that if 'gp' is present it is written as 'GP' to realistically reflect the title of a track's Grand Prix layout
+        # capitalising the title of the track, and ensuring that if 'gp' is present it is written as 'GP' to realistically reflect the title of a track's Grand Prix layout
         def capitalize_venue(venue_name):
             words = venue_name.split()
             capitalized_words = []
@@ -488,18 +481,14 @@ class TelemetryWindow(QWidget):
         ax.set_xticks([])
         ax.set_yticks([])
     
-        # tight layout, to cut down on whitespace
         fig.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02)
     
-        # Creating a widget to house the plot
         canvas = FigureCanvas(fig)
         return canvas
     
 
 
 #----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
     # -----------------------
     # Overview Page
     # -----------------------
@@ -514,7 +503,8 @@ class TelemetryWindow(QWidget):
 
         # -=Title=-
         session_type = self.session_type if hasattr(self, "session_type") else "Practice"
-        title = QLabel(f"{session_type} Session Overview")
+        session_type_display = session_type.capitalize()
+        title = QLabel(f"{session_type_display} Session Overview")
         title.setStyleSheet("""
             font-size: 38px;
             font-weight: bold;
@@ -524,7 +514,6 @@ class TelemetryWindow(QWidget):
         layout.addWidget(title)
 
         # Get Environmental Data from csv
-        # taking from first non-null value (subject to change this as not very resilient)
         air_temp = self.telemetry_df["AirTemp"].dropna().iloc[0] if "AirTemp" in self.telemetry_df.columns else 0
         track_temp = self.telemetry_df["TrackTemp"].dropna().iloc[0] if "TrackTemp" in self.telemetry_df.columns else 0
         relative_humidity = self.telemetry_df["RelativeHumidity"].dropna().iloc[0] if "RelativeHumidity" in self.telemetry_df.columns else 0
@@ -538,7 +527,7 @@ class TelemetryWindow(QWidget):
         pressure_str = f"{air_pressure / 3386.39:.2f} Hg"
         density_str = f"{air_density:.3f} kg/m³"
 
-        # Get weather condition using index and applying the icons
+        # Get weather condition
         skies_value = int(self.telemetry_df["Skies"].dropna().iloc[0]) if "Skies" in self.telemetry_df.columns else 0
         weather_map = {
             0: ("Clear", "weather_clear"),
@@ -547,7 +536,6 @@ class TelemetryWindow(QWidget):
             3: ("Overcast", "weather_overcast")
         }
         weather_text, weather_icon_name = weather_map.get(skies_value, ("Clear", "weather_clear"))
-
 
         #-=Environmental Conditions Bar=-
         env_bar = QWidget()
@@ -559,7 +547,7 @@ class TelemetryWindow(QWidget):
                 border: 1px solid #e5e7eb;
             }
         """)
-    
+
         env_layout = QHBoxLayout(env_bar)
         env_layout.setContentsMargins(20, 10, 20, 10)
         env_layout.setSpacing(50)
@@ -569,37 +557,28 @@ class TelemetryWindow(QWidget):
         weather_main_layout = QVBoxLayout(weather_widget)
         weather_main_layout.setSpacing(2)
         weather_main_layout.setContentsMargins(0, 0, 0, 0)
-    
+
         weather_label = QLabel("Weather")
         weather_label.setStyleSheet("font-size: 16px; color: #6b7280; font-weight: 500;")
-    
-        
+
         weather_content = QWidget()
         weather_content_layout = QHBoxLayout(weather_content)
         weather_content_layout.setContentsMargins(0, 0, 0, 0)
         weather_content_layout.setSpacing(10)
-    
-        # applying the weathre icon
+
         weather_icon = QLabel()
         weather_pixmap = QPixmap(f"icons/{weather_icon_name}.png")
         if not weather_pixmap.isNull():
-            # Ensure border is visible, had some clipping issues
             weather_icon.setPixmap(weather_pixmap.scaled(55, 55, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         weather_icon.setFixedSize(60, 60)
         weather_icon.setAlignment(Qt.AlignCenter)
-    
-         # Weather text
+
         weather_value = QLabel(weather_text)
         weather_value.setStyleSheet("font-size: 24px; color: #111827; font-weight: bold;")
 
-        #REFERENCE OF MEASUREMENTS (TODO verify barometric pressure conversion consistency)
-        # Air & Track Temps in C*
-        # Humidity in %
-        # Air Pressure in Hg
-        # Air Density in kg/m^3
         weather_content_layout.addWidget(weather_icon)
         weather_content_layout.addWidget(weather_value)
-    
+
         weather_main_layout.addWidget(weather_label)
         weather_main_layout.addWidget(weather_content)
 
@@ -613,21 +592,21 @@ class TelemetryWindow(QWidget):
         air_temp_label.setStyleSheet("font-size: 16px; color: #6b7280; font-weight: 500;")
         air_temp_value = QLabel(air_temp_str)
         air_temp_value.setStyleSheet("font-size: 24px; color: #111827; font-weight: bold;")
-    
+
         air_temp_layout.addWidget(air_temp_label)
         air_temp_layout.addWidget(air_temp_value)
-    
+
         # Track Temperature Section
         track_temp_widget = QWidget()
         track_temp_layout = QVBoxLayout(track_temp_widget)
         track_temp_layout.setSpacing(2)
         track_temp_layout.setContentsMargins(0, 0, 0, 0)
-    
+
         track_temp_label = QLabel("Track Temperature")
         track_temp_label.setStyleSheet("font-size: 16px; color: #6b7280; font-weight: 500;")
         track_temp_value = QLabel(track_temp_str)
         track_temp_value.setStyleSheet("font-size: 24px; color: #111827; font-weight: bold;")
-    
+
         track_temp_layout.addWidget(track_temp_label)
         track_temp_layout.addWidget(track_temp_value)
 
@@ -681,106 +660,248 @@ class TelemetryWindow(QWidget):
         env_layout.addWidget(pressure_widget)
         env_layout.addWidget(density_widget)
         env_layout.addStretch()
-    
+
         layout.addWidget(env_bar)
         layout.addSpacing(10)
 
-        # -=Horizontal layout for table and track map=-
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(20)  # Space between table and map
+        # -=QUALIFYING SPECIFIC: Best Lap Card + Track Map=-
+        if session_type == "Qualifying":
+            quali_content_layout = QHBoxLayout()
+            quali_content_layout.setSpacing(20)
+            
+            best_lap_card = QWidget()
+            best_lap_card.setFixedWidth(500)
+            best_lap_card.setFixedHeight(200)
+            best_lap_card.setStyleSheet("""
+                QWidget {
+                    background-color: #f8f9fa;
+                    border-radius: 8px;
+                    border: 2px solid #000000;
+                }
+            """)
+            
+            best_lap_layout = QVBoxLayout(best_lap_card)
+            best_lap_layout.setContentsMargins(20, 15, 20, 15)
+            best_lap_layout.setSpacing(10)
+            
+            card_title = QLabel("🏆 Best Qualifying Lap")
+            card_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #000000;")
+            best_lap_layout.addWidget(card_title)
+            
+            if hasattr(self, 'lap_timings') and len(self.lap_timings) > 0:
+                valid_laps = {lap: data for lap, data in self.lap_timings.items() if data['is_valid']}
+                if valid_laps:
+                    best_lap_num = min(valid_laps, key=lambda x: valid_laps[x]['time'])
+                    best_lap_data = valid_laps[best_lap_num]
+                    
+                    # Best lap time
+                    best_time_label = QLabel(f"Lap {best_lap_num}: {best_lap_data['time_str']}")
+                    best_time_label.setStyleSheet("font-size: 32px; font-weight: bold; color: #111827;")
+                    best_lap_layout.addWidget(best_time_label)
+                    
+                    # Sector times
+                    sector1_time = best_lap_data['sector1']
+                    sector2_time = best_lap_data['sector2']
+                    sector3_time = best_lap_data['sector3']
+                    
+                    s1_min = int(sector1_time // 60)
+                    s1_sec = int(sector1_time % 60)
+                    s1_ms = int((sector1_time - int(sector1_time)) * 1000)
+                    s1_str = f"{s1_min:02}:{s1_sec:02}.{s1_ms:03}"
+                    
+                    s2_min = int(sector2_time // 60)
+                    s2_sec = int(sector2_time % 60)
+                    s2_ms = int((sector2_time - int(sector2_time)) * 1000)
+                    s2_str = f"{s2_min:02}:{s2_sec:02}.{s2_ms:03}"
+                    
+                    s3_min = int(sector3_time // 60)
+                    s3_sec = int(sector3_time % 60)
+                    s3_ms = int((sector3_time - int(sector3_time)) * 1000)
+                    s3_str = f"{s3_min:02}:{s3_sec:02}.{s3_ms:03}"
+                    
+                    sectors_label = QLabel(f"Sector 1: {s1_str}  |  Sector 2: {s2_str}  |  Sector 3: {s3_str}")
+                    sectors_label.setStyleSheet("font-size: 14px; color: #374151;")
+                    best_lap_layout.addWidget(sectors_label)
+            else:
+                self.calculate_lap_timings()
+                valid_laps = {lap: data for lap, data in self.lap_timings.items() if data['is_valid']}
+                if valid_laps:
+                    best_lap_num = min(valid_laps, key=lambda x: valid_laps[x]['time'])
+                    best_lap_data = valid_laps[best_lap_num]
+                    
+                    best_time_label = QLabel(f"Lap {best_lap_num}: {best_lap_data['time_str']}")
+                    best_time_label.setStyleSheet("font-size: 32px; font-weight: bold; color: #111827;")
+                    best_lap_layout.addWidget(best_time_label)
+                    
+                    sector1_time = best_lap_data['sector1']
+                    sector2_time = best_lap_data['sector2']
+                    sector3_time = best_lap_data['sector3']
+                    
+                    s1_min = int(sector1_time // 60)
+                    s1_sec = int(sector1_time % 60)
+                    s1_ms = int((sector1_time - int(sector1_time)) * 1000)
+                    s1_str = f"{s1_min:02}:{s1_sec:02}.{s1_ms:03}"
+                    
+                    s2_min = int(sector2_time // 60)
+                    s2_sec = int(sector2_time % 60)
+                    s2_ms = int((sector2_time - int(sector2_time)) * 1000)
+                    s2_str = f"{s2_min:02}:{s2_sec:02}.{s2_ms:03}"
+                    
+                    s3_min = int(sector3_time // 60)
+                    s3_sec = int(sector3_time % 60)
+                    s3_ms = int((sector3_time - int(sector3_time)) * 1000)
+                    s3_str = f"{s3_min:02}:{s3_sec:02}.{s3_ms:03}"
+                    
+                    sectors_label = QLabel(f"Sector 1: {s1_str}  |  Sector 2: {s2_str}  |  Sector 3: {s3_str}")
+                    sectors_label.setStyleSheet("font-size: 14px; color: #374151;")
+                    best_lap_layout.addWidget(sectors_label)
+                else:
+                    no_data_label = QLabel("No valid lap data available")
+                    no_data_label.setStyleSheet("font-size: 16px; color: #6b7280;")
+                    best_lap_layout.addWidget(no_data_label)
+            
+            best_lap_layout.addStretch()
+            
+            # -=Track Map=-
+            track_map = self.make_track_map_widget(venue)
+            track_map.setFixedSize(900, 750) 
+            track_map.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            
+            quali_content_layout.addWidget(best_lap_card, alignment=Qt.AlignTop | Qt.AlignLeft)
+            quali_content_layout.addWidget(track_map, alignment=Qt.AlignTop | Qt.AlignLeft)
+            quali_content_layout.addStretch()
+            
+            layout.addLayout(quali_content_layout)
 
-        # -=Table Data=-
-        # TODO: need to remove the headers
-        df_valid = self.telemetry_df[
-            (self.telemetry_df["Lap"] > 0) &
-            (self.telemetry_df["LapLastLapTime"] > 0)
-        ].copy()
+        # -=PRACTICE SPECIFIC: Table and Track Map=-
+        if session_type == "Practice":
+            # -=Horizontal layout for table and track map=-
+            content_layout = QHBoxLayout()
+            content_layout.setSpacing(20)
 
-        laps_completed = int(sorted(df_valid["Lap"].dropna().unique())[-1])
-        fastest_lap_seconds = df_valid["LapLastLapTime"].min()
-        minutes = int(fastest_lap_seconds // 60)
-        seconds = int(fastest_lap_seconds % 60)
-        millis = int((fastest_lap_seconds - int(fastest_lap_seconds)) * 1000)
-        fastest_lap_formatted = f"{minutes:02}:{seconds:02}.{millis:03}"
-        fastest_lap_on = int(df_valid.loc[df_valid["LapLastLapTime"].idxmin()]["Lap"])
+            # -=Table Data=-
+            df_valid = self.telemetry_df[
+                (self.telemetry_df["Lap"] > 0) &
+                (self.telemetry_df["LapLastLapTime"] > 0)
+            ].copy()
 
-        overview_df = pd.DataFrame({
-            "Metric": ["Laps Completed", "Fastest Lap", "Fastest Lap Set On"],
-            "Value": [laps_completed, fastest_lap_formatted, fastest_lap_on]
-        })
+            laps_completed = int(sorted(df_valid["Lap"].dropna().unique())[-1])
+            fastest_lap_seconds = df_valid["LapLastLapTime"].min()
+            minutes = int(fastest_lap_seconds // 60)
+            seconds = int(fastest_lap_seconds % 60)
+            millis = int((fastest_lap_seconds - int(fastest_lap_seconds)) * 1000)
+            fastest_lap_formatted = f"{minutes:02}:{seconds:02}.{millis:03}"
+            fastest_lap_on = int(df_valid.loc[df_valid["LapLastLapTime"].idxmin()]["Lap"])
 
-        # -=Table Widget=-
-        table = QTableWidget(len(overview_df), len(overview_df.columns))
-        table.horizontalHeader().setVisible(False)
-        table.verticalHeader().setVisible(False)
-        table.setFrameShape(QFrame.NoFrame)
-        table.setEditTriggers(QTableWidget.NoEditTriggers)
-        table.setSelectionMode(QTableWidget.NoSelection)
+            overview_df = pd.DataFrame({
+                "Metric": ["Laps Completed", "Fastest Lap", "Fastest Lap Set On"],
+                "Value": [laps_completed, fastest_lap_formatted, fastest_lap_on]
+            })
 
-        # Fill table
-        for row in range(len(overview_df)):
-            for col in range(len(overview_df.columns)):
-                item = QTableWidgetItem(str(overview_df.iat[row, col]))
-                if col == 0:
-                    item.setFlags(Qt.ItemIsEnabled)
-                table.setItem(row, col, item)
+            # -=Table Widget=-
+            table = QTableWidget(len(overview_df), len(overview_df.columns))
+            table.horizontalHeader().setVisible(False)
+            table.verticalHeader().setVisible(False)
+            table.setFrameShape(QFrame.NoFrame)
+            table.setEditTriggers(QTableWidget.NoEditTriggers)
+            table.setSelectionMode(QTableWidget.NoSelection)
 
-        # Column sizing
-        h_header = table.horizontalHeader()
-        h_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        h_header.setSectionResizeMode(1, QHeaderView.Stretch)
+            # Fill table
+            for row in range(len(overview_df)):
+                for col in range(len(overview_df.columns)):
+                    item = QTableWidgetItem(str(overview_df.iat[row, col]))
+                    if col == 0:
+                        item.setFlags(Qt.ItemIsEnabled)
+                    table.setItem(row, col, item)
 
-        # Set fixed table size to show all rows
-        table.setFixedHeight(150) 
-        table.setFixedWidth(500)  
+            # Column sizing
+            h_header = table.horizontalHeader()
+            h_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            h_header.setSectionResizeMode(1, QHeaderView.Stretch)
 
-        table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            # Set fixed table size
+            table.setFixedHeight(150) 
+            table.setFixedWidth(500)  
+            table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # no scrolling necesary on this one as its way smaller than the preview screen table
-        table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            table.setStyleSheet("""
+                QTableWidget {
+                    background-color: #bfbec1;
+                    color: #111827;
+                    gridline-color: #27272b;
+                    font-size: 24px;
+                    border-top: 1px solid #27272b;
+                }
+                QTableWidget::item {
+                    background-color: white;
+                    padding: 10px;
+                }
+                QHeaderView::section {
+                    background-color: #bfbec1;
+                    color: black;
+                    font-weight: bold;
+                    font-size: 20px;
+                    border: none;
+                    padding: 6px;
+                }
+            """)
 
-        table.setStyleSheet("""
-            QTableWidget {
-                background-color: #bfbec1;
-                color: #111827;
-                gridline-color: #27272b;
-                font-size: 24px;
-                border-top: 1px solid #27272b;
-            }
-            QTableWidget::item {
-                background-color: white;
-                padding: 10px;
-            }
-            QHeaderView::section {
-                background-color: #bfbec1;
-                color: black;
-                font-weight: bold;
-                font-size: 20px;
-                border: none;
-                padding: 6px;
-            }
-        """)
+            # -=Track Map=-
+            track_map = self.make_track_map_widget(venue)
+            track_map.setFixedSize(600, 500) 
+            table.setContentsMargins(0, 0, 0, 0)
+            table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            content_layout.addWidget(table, alignment=Qt.AlignTop | Qt.AlignLeft)
+            content_layout.addWidget(track_map, alignment=Qt.AlignTop | Qt.AlignLeft)
+            content_layout.addStretch()  
 
-        # -=Track Map=-
-        track_map = self.make_track_map_widget(venue)
-        #Map Size
-        track_map.setFixedSize(600, 500) 
-        table.setContentsMargins(0, 0, 0, 0)
-        table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-
-        # Add table and track map to horizontal layout
-        content_layout.addWidget(table, alignment=Qt.AlignTop | Qt.AlignLeft)
-        content_layout.addWidget(track_map, alignment=Qt.AlignTop | Qt.AlignLeft)
-        content_layout.addStretch()  
-
-        
-        layout.addLayout(content_layout)
+            layout.addLayout(content_layout)
 
         layout.addStretch()
 
         return page
 
+
+    def update_overview_lap_list(self):
+        """Update lap list based on selected order - uses same calculation as timing screen"""
+        if not hasattr(self, 'overview_lap_list'):
+            return
+            
+        self.overview_lap_list.clear()
+        
+        if not hasattr(self, 'lap_timings') or len(self.lap_timings) == 0:
+            self.calculate_lap_timings()
+        
+        lap_times_list = [(lap, data['time']) for lap, data in self.lap_timings.items()]
+        
+        order = self.overview_lap_order.currentText()
+        
+        if order == "Fastest to Slowest":
+            sorted_laps = sorted(lap_times_list, key=lambda x: x[1])
+        elif order == "Slowest to Fastest":
+            sorted_laps = sorted(lap_times_list, key=lambda x: x[1], reverse=True)
+        else:  
+            sorted_laps = sorted(lap_times_list, key=lambda x: x[0])
+        
+        display_lap_counter = 1
+        
+        for lap_num, lap_time in sorted_laps:
+            minutes = int(lap_time // 60)
+            seconds = int(lap_time % 60)
+            millis = int((lap_time - int(lap_time)) * 1000)
+            time_str = f"{minutes:02}:{seconds:02}.{millis:03}"
+            
+            self.overview_lap_list.addItem(f"Lap {display_lap_counter}: {time_str}")
+            display_lap_counter += 1
+                
+    def on_overview_lap_selected(self, item):
+        """Handle lap selection from overview page"""
+        lap_text = item.text()
+        lap_num = int(lap_text.split(":")[0].replace("Lap ", ""))
+        print(f"Selected lap {lap_num} from overview")
+   
 #----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     # -----------------------
@@ -5420,4 +5541,6 @@ if __name__ == "__main__":
 
 #TODO: Test scrollability of all tables, meaning, record a lot of laps, perform a lot of lockups
 #TODO: Implement pitstop detection (inlap | outlap) colour them accordingly in table
+#TODO: imp incident page
+#TODO: imp lap v lap comaprison
 
