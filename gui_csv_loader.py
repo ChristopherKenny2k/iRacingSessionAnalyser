@@ -859,7 +859,138 @@ class TelemetryWindow(QWidget):
 
             layout.addLayout(content_layout)
 
+        # -=RACE SPECIFIC: Race Summary Table + Track Map=-
+        if session_type == "Race":
+            content_layout = QHBoxLayout()
+            content_layout.setSpacing(0)
+
+            # -=Race Summary Data=-
+            df_valid = self.telemetry_df[
+                (self.telemetry_df["Lap"] > 0)
+            ].copy()
+
+            lap_1_data = self.telemetry_df[self.telemetry_df["Lap"] == 1]
+            if len(lap_1_data) > 0:
+                starting_position = int(lap_1_data["PlayerCarPosition"].iloc[0])
+            else:
+                starting_position = 0
+
+            last_lap = df_valid["Lap"].max()
+            last_lap_data = self.telemetry_df[self.telemetry_df["Lap"] == last_lap]
+            if len(last_lap_data) > 0:
+                finishing_position = int(last_lap_data["PlayerCarPosition"].iloc[-1])
+            else:
+                finishing_position = 0
+
+            position_change = starting_position - finishing_position
+            if position_change > 0:
+                position_change_str = f"▲ {position_change}"
+                position_color = "#22c55e"  # Green
+            elif position_change < 0:
+                position_change_str = f"▼ {abs(position_change)}"
+                position_color = "#ef4444"  # Red
+            else:
+                position_change_str = "—"
+                position_color = "#6b7280"  # Gray
+
+            total_laps = int(df_valid["Lap"].max())
+
+            race_time_seconds = self.telemetry_df["SessionTime"].max()
+            hours = int(race_time_seconds // 3600)
+            minutes = int((race_time_seconds % 3600) // 60)
+            seconds = int(race_time_seconds % 60)
+            if hours > 0:
+                race_time_str = f"{hours:02}:{minutes:02}:{seconds:02}"
+            else:
+                race_time_str = f"{minutes:02}:{seconds:02}"
+
+            race_df = pd.DataFrame({
+                "Metric": [
+                    "Starting Position",
+                    "Finishing Position", 
+                    "Position Change",
+                    "Race Length (Laps)",
+                    "Race Length (Time)"
+                ],
+                "Value": [
+                    starting_position,
+                    finishing_position,
+                    position_change_str,
+                    total_laps,
+                    race_time_str
+                ]
+            })
+
+            # -=Table Widget=-
+            table = QTableWidget(len(race_df), len(race_df.columns))
+            table.horizontalHeader().setVisible(False)
+            table.verticalHeader().setVisible(False)
+            table.setFrameShape(QFrame.NoFrame)
+            table.setEditTriggers(QTableWidget.NoEditTriggers)
+            table.setSelectionMode(QTableWidget.NoSelection)
+
+            for row in range(len(race_df)):
+                for col in range(len(race_df.columns)):
+                    value = str(race_df.iat[row, col])
+                    item = QTableWidgetItem(value)
+                    
+       
+                    if row == 2 and col == 1:  
+                        item.setForeground(QColor(position_color))
+                        font = item.font()
+                        font.setBold(True)
+                        item.setFont(font)
+                    
+                    if col == 0:
+                        item.setFlags(Qt.ItemIsEnabled)
+                    
+                    table.setItem(row, col, item)
+
+            h_header = table.horizontalHeader()
+            h_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            h_header.setSectionResizeMode(1, QHeaderView.Stretch)
+
+            table.setFixedHeight(250)  
+            table.setFixedWidth(500)  
+            table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+            table.setStyleSheet("""
+                QTableWidget {
+                    background-color: #bfbec1;
+                    color: #111827;
+                    gridline-color: #27272b;
+                    font-size: 24px;
+                    border-top: 1px solid #27272b;
+                }
+                QTableWidget::item {
+                    background-color: white;
+                    padding: 10px;
+                }
+                QHeaderView::section {
+                    background-color: #bfbec1;
+                    color: black;
+                    font-weight: bold;
+                    font-size: 20px;
+                    border: none;
+                    padding: 6px;
+                }
+            """)
+
+            track_map = self.make_track_map_widget(venue)
+            track_map.setFixedSize(600, 500) 
+            table.setContentsMargins(0, 0, 0, 0)
+            table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+            content_layout.addWidget(table, alignment=Qt.AlignTop | Qt.AlignLeft)
+            content_layout.addWidget(track_map, alignment=Qt.AlignTop | Qt.AlignLeft)
+            content_layout.addStretch()  
+
+            layout.addLayout(content_layout)
+        
         layout.addStretch()
+            
 
         return page
 
