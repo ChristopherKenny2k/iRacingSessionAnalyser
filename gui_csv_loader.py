@@ -395,95 +395,113 @@ class TelemetryWindow(QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.resizeColumnsToContents()
 
-    #==========
-    # PLOT TRACK MAP
-    #==========
-    def make_track_map_widget(self, venue):
+    def make_race_track_map_widget(self, venue):
+        """Create track map with overtake markers for race overview"""
         from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
         from matplotlib.figure import Figure
-        import numpy as np
-
-        # for overview screen track "map" i plot the co-ord-s of the first clean* lap in the data set, if not clean lap is present, fastest lap is used
-        # Clean Lap* = a clean lap is one where the car is recorded as being "on-track" for the entire lap, to ensure an accurate depiction of the map
-        selected_lap_data = None
-
-        # Get valid laps (Lap > 0) done because lap 0 in PRACTICE/QUALIFYING session starts in pits, and in RACE sessions is the small distance at start before crossing the line, either from a standing start or rolling start
-        valid_laps = self.telemetry_df[self.telemetry_df["Lap"] > 0]["Lap"].unique()
-
-        # Rretrieving the first clean* lap that i mentioned above
-        for lap_num in sorted(valid_laps):
-            lap_data = self.telemetry_df[
-                (self.telemetry_df["Lap"] == lap_num)
-            ].copy()
-    
-            # here is the check for the car on track for entirety of lap
-            if (lap_data["IsOnTrackCar"] == 1).all():
-                selected_lap_data = lap_data
-                break
-
-        # fallback = i go to the fastest lap in the dataset
-        if selected_lap_data is None:
-            fastest_lap_num = int(self.telemetry_df.loc[
-                self.telemetry_df["LapLastLapTime"].idxmin()
-            ]["Lap"])
-            selected_lap_data = self.telemetry_df[
-            self.telemetry_df["Lap"] == fastest_lap_num
-        ].copy()
         
-        # sorting by LapDistPct
-        selected_lap_data = selected_lap_data.sort_values("LapDistPct")
-
-        # Using matplot lib to plot the coordinates
-        fig = Figure(figsize=(10, 8), facecolor='#bfbec1')
-        ax = fig.add_subplot(111)
-
-        # Plot the track TODO: potentially add some UI which allows user to alter the colours for preference
-        ax.plot(selected_lap_data["Lon"], selected_lap_data["Lat"], 
-            color='#222222', linewidth=3.5)
-
-        # Here i add a red line perpendicular to the direction of the first two coordinates on the lap, while this could be achieved to a more accurate degree by taking the last point of the previous lap, doing it like this is adequate as the ibt file enters a row of data for every tick in the session, so even when downscaled, this is still accurate enough to be used on my map
-        start_lon = selected_lap_data["Lon"].iloc[0]
-        start_lat = selected_lap_data["Lat"].iloc[0]
-        second_lon = selected_lap_data["Lon"].iloc[1]
-        second_lat = selected_lap_data["Lat"].iloc[1]
-        dx = second_lon - start_lon
-        dy = second_lat - start_lat
-        perp_dx = -dy
-        perp_dy = dx
-
-        length = np.sqrt(perp_dx**2 + perp_dy**2)
-        if length > 0:
-            perp_dx = perp_dx / length * 0.0003
-            perp_dy = perp_dy / length * 0.0003
-
-        # Plotting it
-        ax.plot([start_lon - perp_dx, start_lon + perp_dx],
-                [start_lat - perp_dy, start_lat + perp_dy],
-                color='red', linewidth=2.5, zorder=10)
-    
-        # capitalising the title of the track, and ensuring that if 'gp' is present it is written as 'GP' to realistically reflect the title of a track's Grand Prix layout
-        def capitalize_venue(venue_name):
-            words = venue_name.split()
-            capitalized_words = []
-            for word in words:
-                if word.lower() == "gp":
-                    capitalized_words.append("GP")
-                else:
-                    capitalized_words.append(word.capitalize())
-            return " ".join(capitalized_words)
-
-        track_title = f"{capitalize_venue(venue)} - Track Map"
-        ax.set_aspect('equal')
-        ax.set_title(track_title, fontsize=14, fontweight='bold', pad=10)
-        ax.grid(True, alpha=0.2, linestyle='--')
-        ax.set_facecolor('white')
-    
-        ax.set_xticks([])
-        ax.set_yticks([])
-    
-        fig.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02)
-    
+        fig = Figure(figsize=(6, 5), facecolor='white')
         canvas = FigureCanvas(fig)
+        ax = fig.add_subplot(111)
+        
+        # Get track outline by sampling points evenly across lap distance percentage
+        # This ensures we get the full track shape
+        df_sorted = self.telemetry_df.sort_values("LapDistPct")
+        
+        # Get one point per percentage increment (0-100%)
+        track_points = []
+        for pct in range(101):
+            closest = df_sorted.iloc[(df_sorted["LapDistPct"] - pct).abs().argsort()[:1]]
+            if len(closest) > 0:
+                track_points.append({
+                    'lat': closest["Lat"].iloc[0],
+                    'lon': closest["Lon"].iloc[0]
+                })
+        
+        if len(track_points) > 0:
+            lats = [p['lat'] for p in track_points]
+            lons = [p['lon'] for p in track_points]
+            ax.plot(lons, lats, color='black', linewidth=2, zorder=1)
+        
+        # Debug: print track coordinates to verify
+        print(f"Track points: {len(track_points)}")
+        if len(track_points) > 0:
+            print(f"Lat range: {min(lats)} to {max(lats)}")
+            print(f"Lon range: {min(lons)} to {max(lons)}")
+        
+        # Plot overtake markers
+        if hasattr(self, 'race_overtakes'):
+            print(f"Total overtakes: {len(self.race_overtakes)}")
+            for overtake in self.race_overtakes:
+                if overtake['is_gain'] and self.show_overtakes:
+                    # Green dot for overtake
+                    ax.scatter(overtake['lon'], overtake['lat'], 
+                            color='#22c55e', s=150, zorder=3, 
+                            edgecolors='white', linewidths=2)
+                elif not overtake['is_gain'] and self.show_overtaken:
+                    # Red dot for being overtaken
+                    ax.scatter(overtake['lon'], overtake['lat'], 
+                            color='#ef4444', s=150, zorder=3,
+                            edgecolors='white', linewidths=2)
+        
+        # Styling
+        ax.set_title(f"{venue}", fontsize=14, fontweight='bold', pad=10)
+        ax.set_aspect('equal')
+        ax.axis('off')
+        fig.tight_layout()
+        
+        # Add hover tooltips
+        self.race_map_annotations = []
+        
+        def on_hover(event):
+            if event.inaxes != ax or event.xdata is None or event.ydata is None:
+                return
+            
+            # Clear previous annotations
+            for ann in self.race_map_annotations:
+                ann.remove()
+            self.race_map_annotations.clear()
+            
+            # Check if hovering over an overtake point
+            if hasattr(self, 'race_overtakes'):
+                for overtake in self.race_overtakes:
+                    # Check if we should show this overtake
+                    if overtake['is_gain'] and not self.show_overtakes:
+                        continue
+                    if not overtake['is_gain'] and not self.show_overtaken:
+                        continue
+                        
+                    # Calculate distance to mouse (in data coordinates)
+                    dx = event.xdata - overtake['lon']
+                    dy = event.ydata - overtake['lat']
+                    distance = (dx**2 + dy**2)**0.5
+                    
+                    # Get axis limits to calculate relative threshold
+                    xlim = ax.get_xlim()
+                    ylim = ax.get_ylim()
+                    x_range = xlim[1] - xlim[0]
+                    y_range = ylim[1] - ylim[0]
+                    threshold = max(x_range, y_range) * 0.02  # 2% of axis range
+                    
+                    # If close enough, show tooltip
+                    if distance < threshold:
+                        tooltip_text = f"Lap {overtake['lap']}\n{overtake['old_pos']} → {overtake['new_pos']}"
+                        ann = ax.annotate(tooltip_text,
+                                        xy=(overtake['lon'], overtake['lat']),
+                                        xytext=(10, 10), textcoords='offset points',
+                                        bbox=dict(boxstyle='round,pad=0.5', 
+                                                fc='yellow', alpha=0.9),
+                                        fontsize=10, fontweight='bold')
+                        self.race_map_annotations.append(ann)
+                        canvas.draw_idle()
+                        break
+            
+            # If no annotation added, redraw to clear
+            if len(self.race_map_annotations) == 0:
+                canvas.draw_idle()
+        
+        canvas.mpl_connect('motion_notify_event', on_hover)
+        
         return canvas
     
 
@@ -903,6 +921,17 @@ class TelemetryWindow(QWidget):
                 race_time_str = f"{hours:02}:{minutes:02}:{seconds:02}"
             else:
                 race_time_str = f"{minutes:02}:{seconds:02}"
+            
+            position_changes = 0
+            prev_position = None
+
+            for lap in sorted(df_valid["Lap"].unique()):
+                lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap]
+                if len(lap_data) > 0:
+                    current_position = int(lap_data["PlayerCarPosition"].iloc[-1])
+                    if prev_position is not None:
+                        position_changes += abs(current_position - prev_position)
+                    prev_position = current_position
 
             race_df = pd.DataFrame({
                 "Metric": [
@@ -921,7 +950,6 @@ class TelemetryWindow(QWidget):
                 ]
             })
 
-            # -=Table Widget=-
             table = QTableWidget(len(race_df), len(race_df.columns))
             table.horizontalHeader().setVisible(False)
             table.verticalHeader().setVisible(False)
@@ -950,7 +978,7 @@ class TelemetryWindow(QWidget):
             h_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
             h_header.setSectionResizeMode(1, QHeaderView.Stretch)
 
-            table.setFixedHeight(250)  
+            table.setFixedHeight(320)  
             table.setFixedWidth(500)  
             table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -978,23 +1006,299 @@ class TelemetryWindow(QWidget):
                 }
             """)
 
-            track_map = self.make_track_map_widget(venue)
-            track_map.setFixedSize(600, 500) 
+            self.race_overtakes = [] 
+            self.show_overtakes = True
+            self.show_overtaken = True
+
+            prev_position = None
+            for lap in sorted(df_valid["Lap"].unique()):
+                lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap].sort_values("SessionTime")
+                
+                if len(lap_data) > 0:
+                    current_position = int(lap_data["PlayerCarPosition"].iloc[-1])
+                    
+                    if prev_position is not None and current_position != prev_position:
+                        mid_idx = len(lap_data) // 2
+                        if mid_idx < len(lap_data):
+                            lat = lap_data["Lat"].iloc[mid_idx]
+                            lon = lap_data["Lon"].iloc[mid_idx]
+                            
+                            is_gain = current_position < prev_position  
+                            
+                            self.race_overtakes.append({
+                                'lat': lat,
+                                'lon': lon,
+                                'lap': int(lap),
+                                'old_pos': prev_position,
+                                'new_pos': current_position,
+                                'is_gain': is_gain
+                            })
+                    
+                    prev_position = current_position
+
+            track_map_container = QWidget()
+            track_map_layout = QVBoxLayout(track_map_container)
+            track_map_layout.setContentsMargins(0, 0, 0, 0)
+            track_map_layout.setSpacing(5)
+
+            track_title = QLabel(venue.upper())
+            track_title.setStyleSheet("font-size: 28px; font-weight: bold; color: #000000;")
+            track_title.setAlignment(Qt.AlignCenter)
+            track_map_layout.addWidget(track_title)
+
+            toggle_layout = QHBoxLayout()
+            toggle_layout.addStretch()
+
+            self.race_overtake_btn = QPushButton("Overtakes")
+            self.race_overtaken_btn = QPushButton("Overtaken")
+            self.race_overtake_btn.setCheckable(True)
+            self.race_overtaken_btn.setCheckable(True)
+            self.race_overtake_btn.setChecked(True)
+            self.race_overtaken_btn.setChecked(True)
+            self.race_overtake_btn.setFixedSize(100, 30)
+            self.race_overtaken_btn.setFixedSize(100, 30)
+
+            toggle_style = """
+                QPushButton {
+                    background-color: %s;
+                    color: white;
+                    border: 2px solid %s;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    font-weight: bold;
+                }
+                QPushButton:checked {
+                    background-color: %s;
+                    border: 2px solid %s;
+                }
+                QPushButton:hover {
+                    opacity: 0.8;
+                }
+            """
+
+            self.race_overtake_btn.setStyleSheet(toggle_style % ("#22c55e", "#22c55e", "#16a34a", "#16a34a"))
+            self.race_overtaken_btn.setStyleSheet(toggle_style % ("#ef4444", "#ef4444", "#dc2626", "#dc2626"))
+
+            self.race_overtake_btn.clicked.connect(self.toggle_race_overtakes)
+            self.race_overtaken_btn.clicked.connect(self.toggle_race_overtaken)
+
+            toggle_layout.addWidget(self.race_overtake_btn)
+            toggle_layout.addWidget(self.race_overtaken_btn)
+
+            track_map_layout.addLayout(toggle_layout)
+
+            self.race_track_map_widget = self.make_race_track_map_widget(venue)
+            track_map_layout.addWidget(self.race_track_map_widget)
+
+            track_map_container.setFixedSize(650, 550)
             table.setContentsMargins(0, 0, 0, 0)
             table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
             content_layout.addWidget(table, alignment=Qt.AlignTop | Qt.AlignLeft)
-            content_layout.addWidget(track_map, alignment=Qt.AlignTop | Qt.AlignLeft)
+            content_layout.addWidget(track_map_container, alignment=Qt.AlignTop | Qt.AlignLeft)
             content_layout.addStretch()  
 
             layout.addLayout(content_layout)
+        
         
         layout.addStretch()
             
 
         return page
 
+    def make_race_track_map_widget(self, venue):
+        """Create track map with overtake markers for race overview"""
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+        from matplotlib.figure import Figure
+        
+        fig = Figure(figsize=(6, 5.5), facecolor='white', dpi=100)
+        canvas = FigureCanvas(fig)
+        
+        canvas.setMinimumSize(600, 500)
+        canvas.setMaximumSize(850, 750)
+        
+        ax = fig.add_subplot(111)
+        
+        available_laps = sorted(self.telemetry_df["Lap"].unique())
 
+        target_lap = None
+        for lap in [3, 4, 2, 5]:
+            if lap in available_laps:
+                target_lap = lap
+                break
+        
+        if target_lap is None and len(available_laps) > 0:
+            target_lap = available_laps[0]
+        
+        lap_data = self.telemetry_df[self.telemetry_df["Lap"] == target_lap].sort_values("LapDistPct")
+        
+        print(f"Using lap {target_lap} for track outline")
+        print(f"Lap data points: {len(lap_data)}")
+        
+        if len(lap_data) > 0:
+            lat = lap_data["Lat"].values
+            lon = lap_data["Lon"].values
+            
+            print(f"Lat range: {lat.min()} to {lat.max()}")
+            print(f"Lon range: {lon.min()} to {lon.max()}")
+            
+            ax.plot(lon, lat, color='black', linewidth=2, zorder=1)
+        else:
+            print("ERROR: No lap data found for track outline!")
+        
+        if hasattr(self, 'race_overtakes'):
+            print(f"Total overtakes: {len(self.race_overtakes)}")
+            for i, overtake in enumerate(self.race_overtakes):
+                
+                if overtake['is_gain'] and self.show_overtakes:
+                    ax.scatter(overtake['lon'], overtake['lat'], 
+                            color='#22c55e', s=150, zorder=3)
+                elif not overtake['is_gain'] and self.show_overtaken:
+                    ax.scatter(overtake['lon'], overtake['lat'], 
+                            color='#ef4444', s=150, zorder=3)
+        
+        ax.set_aspect('equal', adjustable='datalim')
+        ax.axis('off')
+
+        fig.tight_layout(pad=0.1)
+
+        ax.autoscale()
+        self.original_xlim = ax.get_xlim()
+        self.original_ylim = ax.get_ylim()
+
+        self.pan_start = None
+        
+        def on_scroll(event):
+            if event.inaxes != ax:
+                return
+            
+            cur_xlim = ax.get_xlim()
+            cur_ylim = ax.get_ylim()
+            
+            xdata = event.xdata
+            ydata = event.ydata
+            
+            base_scale = 1.2
+            if event.button == 'up':
+                scale_factor = 1 / base_scale
+            elif event.button == 'down':
+                scale_factor = base_scale
+            else:
+                return
+            
+            new_width = (cur_xlim[1] - cur_xlim[0]) * scale_factor
+            new_height = (cur_ylim[1] - cur_ylim[0]) * scale_factor
+            
+            relx = (cur_xlim[1] - xdata) / (cur_xlim[1] - cur_xlim[0])
+            rely = (cur_ylim[1] - ydata) / (cur_ylim[1] - cur_ylim[0])
+            
+            ax.set_xlim([xdata - new_width * (1 - relx), xdata + new_width * relx])
+            ax.set_ylim([ydata - new_height * (1 - rely), ydata + new_height * rely])
+            
+            canvas.draw_idle()
+        
+        def on_press(event):
+            if event.inaxes != ax:
+                return
+            self.pan_start = (event.xdata, event.ydata)
+        
+        def on_release(event):
+            self.pan_start = None
+        
+        def on_motion(event):
+            if self.pan_start is None or event.inaxes != ax:
+                return
+            
+            if event.xdata is None or event.ydata is None:
+                return
+            
+            dx = self.pan_start[0] - event.xdata
+            dy = self.pan_start[1] - event.ydata
+            
+            cur_xlim = ax.get_xlim()
+            cur_ylim = ax.get_ylim()
+            
+            ax.set_xlim([cur_xlim[0] + dx, cur_xlim[1] + dx])
+            ax.set_ylim([cur_ylim[0] + dy, cur_ylim[1] + dy])
+            
+            canvas.draw_idle()
+        
+        canvas.mpl_connect('scroll_event', on_scroll)
+        canvas.mpl_connect('button_press_event', on_press)
+        canvas.mpl_connect('button_release_event', on_release)
+        canvas.mpl_connect('motion_notify_event', on_motion)
+        
+        self.race_map_annotations = []
+        
+        def on_hover(event):
+            if self.pan_start is not None:
+                return
+                
+            if event.inaxes != ax or event.xdata is None or event.ydata is None:
+                return
+            
+            for ann in self.race_map_annotations:
+                ann.remove()
+            self.race_map_annotations.clear()
+            
+            if hasattr(self, 'race_overtakes'):
+                for overtake in self.race_overtakes:
+                    if overtake['is_gain'] and not self.show_overtakes:
+                        continue
+                    if not overtake['is_gain'] and not self.show_overtaken:
+                        continue
+                        
+                    dx = event.xdata - overtake['lon']
+                    dy = event.ydata - overtake['lat']
+                    distance = (dx**2 + dy**2)**0.5
+                    
+                    xlim = ax.get_xlim()
+                    ylim = ax.get_ylim()
+                    x_range = xlim[1] - xlim[0]
+                    y_range = ylim[1] - ylim[0]
+                    threshold = max(x_range, y_range) * 0.02
+                    
+                    if distance < threshold:
+                        tooltip_text = f"Lap {overtake['lap']}\n{overtake['old_pos']} → {overtake['new_pos']}"
+                        ann = ax.annotate(tooltip_text,
+                                        xy=(overtake['lon'], overtake['lat']),
+                                        xytext=(10, 10), textcoords='offset points',
+                                        bbox=dict(boxstyle='round,pad=0.5', 
+                                                fc='yellow', alpha=0.9),
+                                        fontsize=10, fontweight='bold')
+                        self.race_map_annotations.append(ann)
+                        canvas.draw_idle()
+                        break
+            
+            if len(self.race_map_annotations) == 0:
+                canvas.draw_idle()
+        
+        canvas.mpl_connect('motion_notify_event', on_hover)
+        
+        return canvas
+
+    def toggle_race_overtakes(self):
+        """Toggle visibility of overtake markers (green dots)"""
+        self.show_overtakes = self.race_overtake_btn.isChecked()
+        self.update_race_track_map()
+
+    def toggle_race_overtaken(self):
+        """Toggle visibility of overtaken markers (red dots)"""
+        self.show_overtaken = self.race_overtaken_btn.isChecked()
+        self.update_race_track_map()
+
+    def update_race_track_map(self):
+        """Redraw the race track map with updated overtake visibility"""
+        if hasattr(self, 'race_track_map_widget'):
+            parent_layout = self.race_track_map_widget.parent().layout()
+
+            parent_layout.removeWidget(self.race_track_map_widget)
+            self.race_track_map_widget.deleteLater()
+
+            venue = self.session_info.get("Venue", "Unknown Venue")
+            self.race_track_map_widget = self.make_race_track_map_widget(venue)
+            parent_layout.addWidget(self.race_track_map_widget)
+            
     def update_overview_lap_list(self):
         """Update lap list based on selected order - uses same calculation as timing screen"""
         if not hasattr(self, 'overview_lap_list'):
