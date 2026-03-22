@@ -903,13 +903,13 @@ class TelemetryWindow(QWidget):
             position_change = starting_position - finishing_position
             if position_change > 0:
                 position_change_str = f"▲ {position_change}"
-                position_color = "#22c55e"  # Green
+                position_color = "#22c55e"
             elif position_change < 0:
                 position_change_str = f"▼ {abs(position_change)}"
-                position_color = "#ef4444"  # Red
+                position_color = "#ef4444"
             else:
                 position_change_str = "—"
-                position_color = "#6b7280"  # Gray
+                position_color = "#6b7280"
 
             total_laps = int(df_valid["Lap"].max())
 
@@ -922,16 +922,84 @@ class TelemetryWindow(QWidget):
             else:
                 race_time_str = f"{minutes:02}:{seconds:02}"
             
-            position_changes = 0
-            prev_position = None
+            self.race_overtakes = []
+            self.show_overtakes = True
+            self.show_overtaken = True
 
-            for lap in sorted(df_valid["Lap"].unique()):
-                lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap]
-                if len(lap_data) > 0:
-                    current_position = int(lap_data["PlayerCarPosition"].iloc[-1])
-                    if prev_position is not None:
-                        position_changes += abs(current_position - prev_position)
-                    prev_position = current_position
+            df_sorted = self.telemetry_df.sort_values("LapTimeline").reset_index(drop=True)
+
+            prev_pos = None
+            for idx in range(min(len(df_sorted), 50000)):
+                current_position = df_sorted["PlayerCarPosition"].iloc[idx]
+                current_lap = df_sorted["Lap"].iloc[idx]
+                lap_dist = df_sorted["LapDistPct"].iloc[idx]
+                
+                if current_lap <= 0 or pd.isna(current_position):
+                    continue
+                
+                current_position = int(current_position)
+                
+                if prev_pos is not None and current_position != prev_pos:
+                    print(f"Lap {current_lap:.1f}, LapDist {lap_dist:.1f}%: {prev_pos} → {current_position}")
+                
+                prev_pos = current_position
+
+            print("\n=== POSITION CHANGES - CarClassPosition ===")
+            prev_pos = None
+            for idx in range(min(len(df_sorted), 50000)):
+                current_position = df_sorted["PlayerCarClassPosition"].iloc[idx]
+                current_lap = df_sorted["Lap"].iloc[idx]
+                lap_dist = df_sorted["LapDistPct"].iloc[idx]
+                
+                if current_lap <= 0 or pd.isna(current_position):
+                    continue
+                
+                current_position = int(current_position)
+                
+                if prev_pos is not None and current_position != prev_pos:
+                    print(f"Lap {current_lap:.1f}, LapDist {lap_dist:.1f}%: {prev_pos} → {current_position}")
+                
+                prev_pos = current_position
+                
+            print("=== END DEBUG ===\n")
+
+            prev_position = None
+            last_recorded_change = None
+
+            for idx in range(len(df_sorted)):
+                current_position = df_sorted["PlayerCarClassPosition"].iloc[idx]
+                current_lap = df_sorted["Lap"].iloc[idx]
+                
+                if current_lap <= 0 or pd.isna(current_position):
+                    continue
+                
+                current_position = int(current_position)
+                
+                if prev_position is not None and current_position != prev_position:
+                    position_diff = abs(current_position - prev_position)
+                    
+                    if position_diff == 1:
+                        lat = df_sorted["Lat"].iloc[idx]
+                        lon = df_sorted["Lon"].iloc[idx]
+                        
+                        is_gain = current_position < prev_position
+                        
+                        if last_recorded_change != (prev_position, current_position):
+                            self.race_overtakes.append({
+                                'lat': lat,
+                                'lon': lon,
+                                'lap': int(current_lap),
+                                'old_pos': prev_position,
+                                'new_pos': current_position,
+                                'is_gain': is_gain
+                            })
+                            
+                            last_recorded_change = (prev_position, current_position)
+                            print(f"Overtake at Lap {current_lap}, LapTimeline {df_sorted['LapTimeline'].iloc[idx]:.2f}: {prev_position} → {current_position} at ({lat:.6f}, {lon:.6f})")
+                
+                prev_position = current_position
+
+            print(f"\nTotal valid overtakes recorded: {len(self.race_overtakes)}")
 
             race_df = pd.DataFrame({
                 "Metric": [
@@ -962,7 +1030,6 @@ class TelemetryWindow(QWidget):
                     value = str(race_df.iat[row, col])
                     item = QTableWidgetItem(value)
                     
-       
                     if row == 2 and col == 1:  
                         item.setForeground(QColor(position_color))
                         font = item.font()
@@ -1005,36 +1072,6 @@ class TelemetryWindow(QWidget):
                     padding: 6px;
                 }
             """)
-
-            self.race_overtakes = [] 
-            self.show_overtakes = True
-            self.show_overtaken = True
-
-            prev_position = None
-            for lap in sorted(df_valid["Lap"].unique()):
-                lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap].sort_values("SessionTime")
-                
-                if len(lap_data) > 0:
-                    current_position = int(lap_data["PlayerCarPosition"].iloc[-1])
-                    
-                    if prev_position is not None and current_position != prev_position:
-                        mid_idx = len(lap_data) // 2
-                        if mid_idx < len(lap_data):
-                            lat = lap_data["Lat"].iloc[mid_idx]
-                            lon = lap_data["Lon"].iloc[mid_idx]
-                            
-                            is_gain = current_position < prev_position  
-                            
-                            self.race_overtakes.append({
-                                'lat': lat,
-                                'lon': lon,
-                                'lap': int(lap),
-                                'old_pos': prev_position,
-                                'new_pos': current_position,
-                                'is_gain': is_gain
-                            })
-                    
-                    prev_position = current_position
 
             track_map_container = QWidget()
             track_map_layout = QVBoxLayout(track_map_container)
@@ -1134,7 +1171,7 @@ class TelemetryWindow(QWidget):
         
         print(f"Using lap {target_lap} for track outline")
         print(f"Lap data points: {len(lap_data)}")
-        
+
         if len(lap_data) > 0:
             lat = lap_data["Lat"].values
             lon = lap_data["Lon"].values
@@ -1142,10 +1179,34 @@ class TelemetryWindow(QWidget):
             print(f"Lat range: {lat.min()} to {lat.max()}")
             print(f"Lon range: {lon.min()} to {lon.max()}")
             
-            ax.plot(lon, lat, color='black', linewidth=2, zorder=1)
+            ax.plot(lon, lat, color='black', linewidth=4, zorder=1)
+            
+            start_lat = lat[0]
+            start_lon = lon[0]
+
+            if len(lat) > 1:
+                dx = lon[1] - lon[0]
+                dy = lat[1] - lat[0]
+                
+                perp_dx = -dy
+                perp_dy = dx
+                
+                length = (perp_dx**2 + perp_dy**2)**0.5
+                if length > 0:
+                    perp_dx /= length
+                    perp_dy /= length
+                    
+
+                    scale = 0.0002
+                    perp_dx *= scale
+                    perp_dy *= scale
+
+                    ax.plot([start_lon - perp_dx, start_lon + perp_dx],
+                        [start_lat - perp_dy, start_lat + perp_dy],
+                        color='red', linewidth=3, zorder=4)
         else:
             print("ERROR: No lap data found for track outline!")
-        
+
         if hasattr(self, 'race_overtakes'):
             print(f"Total overtakes: {len(self.race_overtakes)}")
             for i, overtake in enumerate(self.race_overtakes):
@@ -1156,7 +1217,7 @@ class TelemetryWindow(QWidget):
                 elif not overtake['is_gain'] and self.show_overtaken:
                     ax.scatter(overtake['lon'], overtake['lat'], 
                             color='#ef4444', s=150, zorder=3)
-        
+
         ax.set_aspect('equal', adjustable='datalim')
         ax.axis('off')
 
