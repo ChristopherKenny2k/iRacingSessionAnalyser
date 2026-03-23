@@ -374,7 +374,7 @@ class TelemetryWindow(QWidget):
     # CSV Preview Loader
     # ===============================
     def load_table_preview(self):
-        self.preview_rows = 200  
+        self.preview_rows = 75 
         df = self.telemetry_df.iloc[:self.preview_rows]
 
         self.table.setRowCount(len(df))
@@ -877,10 +877,10 @@ class TelemetryWindow(QWidget):
 
             layout.addLayout(content_layout)
 
-        # -=RACE SPECIFIC: Race Summary Table + Track Map=-
+        # -=RACE SPECIFIC: Race Summary Table + Position Tracking=-
         if session_type == "Race":
             content_layout = QHBoxLayout()
-            content_layout.setSpacing(0)
+            content_layout.setSpacing(20)
 
             # -=Race Summary Data=-
             df_valid = self.telemetry_df[
@@ -889,14 +889,14 @@ class TelemetryWindow(QWidget):
 
             lap_1_data = self.telemetry_df[self.telemetry_df["Lap"] == 1]
             if len(lap_1_data) > 0:
-                starting_position = int(lap_1_data["PlayerCarPosition"].iloc[0])
+                starting_position = int(lap_1_data["PlayerCarClassPosition"].iloc[0])
             else:
                 starting_position = 0
 
             last_lap = df_valid["Lap"].max()
             last_lap_data = self.telemetry_df[self.telemetry_df["Lap"] == last_lap]
             if len(last_lap_data) > 0:
-                finishing_position = int(last_lap_data["PlayerCarPosition"].iloc[-1])
+                finishing_position = int(last_lap_data["PlayerCarClassPosition"].iloc[-1])
             else:
                 finishing_position = 0
 
@@ -922,84 +922,9 @@ class TelemetryWindow(QWidget):
             else:
                 race_time_str = f"{minutes:02}:{seconds:02}"
             
-            self.race_overtakes = []
-            self.show_overtakes = True
-            self.show_overtaken = True
-
-            df_sorted = self.telemetry_df.sort_values("LapTimeline").reset_index(drop=True)
-
-            prev_pos = None
-            for idx in range(min(len(df_sorted), 50000)):
-                current_position = df_sorted["PlayerCarPosition"].iloc[idx]
-                current_lap = df_sorted["Lap"].iloc[idx]
-                lap_dist = df_sorted["LapDistPct"].iloc[idx]
-                
-                if current_lap <= 0 or pd.isna(current_position):
-                    continue
-                
-                current_position = int(current_position)
-                
-                if prev_pos is not None and current_position != prev_pos:
-                    print(f"Lap {current_lap:.1f}, LapDist {lap_dist:.1f}%: {prev_pos} → {current_position}")
-                
-                prev_pos = current_position
-
-            print("\n=== POSITION CHANGES - CarClassPosition ===")
-            prev_pos = None
-            for idx in range(min(len(df_sorted), 50000)):
-                current_position = df_sorted["PlayerCarClassPosition"].iloc[idx]
-                current_lap = df_sorted["Lap"].iloc[idx]
-                lap_dist = df_sorted["LapDistPct"].iloc[idx]
-                
-                if current_lap <= 0 or pd.isna(current_position):
-                    continue
-                
-                current_position = int(current_position)
-                
-                if prev_pos is not None and current_position != prev_pos:
-                    print(f"Lap {current_lap:.1f}, LapDist {lap_dist:.1f}%: {prev_pos} → {current_position}")
-                
-                prev_pos = current_position
-                
-            print("=== END DEBUG ===\n")
-
-            prev_position = None
-            last_recorded_change = None
-
-            for idx in range(len(df_sorted)):
-                current_position = df_sorted["PlayerCarClassPosition"].iloc[idx]
-                current_lap = df_sorted["Lap"].iloc[idx]
-                
-                if current_lap <= 0 or pd.isna(current_position):
-                    continue
-                
-                current_position = int(current_position)
-                
-                if prev_position is not None and current_position != prev_position:
-                    position_diff = abs(current_position - prev_position)
-                    
-                    if position_diff == 1:
-                        lat = df_sorted["Lat"].iloc[idx]
-                        lon = df_sorted["Lon"].iloc[idx]
-                        
-                        is_gain = current_position < prev_position
-                        
-                        if last_recorded_change != (prev_position, current_position):
-                            self.race_overtakes.append({
-                                'lat': lat,
-                                'lon': lon,
-                                'lap': int(current_lap),
-                                'old_pos': prev_position,
-                                'new_pos': current_position,
-                                'is_gain': is_gain
-                            })
-                            
-                            last_recorded_change = (prev_position, current_position)
-                            print(f"Overtake at Lap {current_lap}, LapTimeline {df_sorted['LapTimeline'].iloc[idx]:.2f}: {prev_position} → {current_position} at ({lat:.6f}, {lon:.6f})")
-                
-                prev_position = current_position
-
-            print(f"\nTotal valid overtakes recorded: {len(self.race_overtakes)}")
+            # -=LEFT COLUMN: Summary Table + Position by Lap Table=-
+            left_column = QVBoxLayout()
+            left_column.setSpacing(20)
 
             race_df = pd.DataFrame({
                 "Metric": [
@@ -1018,12 +943,12 @@ class TelemetryWindow(QWidget):
                 ]
             })
 
-            table = QTableWidget(len(race_df), len(race_df.columns))
-            table.horizontalHeader().setVisible(False)
-            table.verticalHeader().setVisible(False)
-            table.setFrameShape(QFrame.NoFrame)
-            table.setEditTriggers(QTableWidget.NoEditTriggers)
-            table.setSelectionMode(QTableWidget.NoSelection)
+            summary_table = QTableWidget(len(race_df), len(race_df.columns))
+            summary_table.horizontalHeader().setVisible(False)
+            summary_table.verticalHeader().setVisible(False)
+            summary_table.setFrameShape(QFrame.NoFrame)
+            summary_table.setEditTriggers(QTableWidget.NoEditTriggers)
+            summary_table.setSelectionMode(QTableWidget.NoSelection)
 
             for row in range(len(race_df)):
                 for col in range(len(race_df.columns)):
@@ -1039,19 +964,19 @@ class TelemetryWindow(QWidget):
                     if col == 0:
                         item.setFlags(Qt.ItemIsEnabled)
                     
-                    table.setItem(row, col, item)
+                    summary_table.setItem(row, col, item)
 
-            h_header = table.horizontalHeader()
+            h_header = summary_table.horizontalHeader()
             h_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
             h_header.setSectionResizeMode(1, QHeaderView.Stretch)
 
-            table.setFixedHeight(320)  
-            table.setFixedWidth(500)  
-            table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-            table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            summary_table.setFixedHeight(260)  
+            summary_table.setFixedWidth(500)  
+            summary_table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            summary_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            summary_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-            table.setStyleSheet("""
+            summary_table.setStyleSheet("""
                 QTableWidget {
                     background-color: #bfbec1;
                     color: #111827;
@@ -1073,73 +998,161 @@ class TelemetryWindow(QWidget):
                 }
             """)
 
+            left_column.addWidget(summary_table)
+
+            lap_positions = []
+            prev_position = None
+
+            for lap in sorted(df_valid["Lap"].unique()):
+                lap_start_data = self.telemetry_df[
+                    (self.telemetry_df["Lap"] == lap) &
+                    (self.telemetry_df["LapTimeline"] >= lap + 0.05) &
+                    (self.telemetry_df["LapTimeline"] <= lap + 0.15)
+                ]
+                
+                if len(lap_start_data) > 0:
+                    position = int(lap_start_data["PlayerCarClassPosition"].iloc[0])
+
+                    if prev_position is not None:
+                        change = prev_position - position 
+                        if change > 0:
+                            change_str = f"▲ {change}"
+                            change_color = "#22c55e"
+                        elif change < 0:
+                            change_str = f"▼ {abs(change)}"
+                            change_color = "#ef4444"
+                        else:
+                            change_str = "—"
+                            change_color = "#6b7280"
+                    else:
+                        change_str = "—"
+                        change_color = "#6b7280"
+                    
+                    lap_positions.append({
+                        'lap': int(lap),
+                        'position': position,
+                        'change_str': change_str,
+                        'change_color': change_color
+                    })
+                    
+                    prev_position = position
+
+            position_df = pd.DataFrame({
+                "Lap": [p['lap'] for p in lap_positions],
+                "Position": [p['position'] for p in lap_positions],
+                "Change": [p['change_str'] for p in lap_positions]
+            })
+
+            position_table = QTableWidget(len(position_df), len(position_df.columns))
+            position_table.setHorizontalHeaderLabels(["Lap", "Position", "Change"])
+            position_table.verticalHeader().setVisible(False)
+            position_table.setFrameShape(QFrame.NoFrame)
+            position_table.setEditTriggers(QTableWidget.NoEditTriggers)
+            position_table.setSelectionMode(QTableWidget.NoSelection)
+
+            for row in range(len(position_df)):
+                for col in range(len(position_df.columns)):
+                    value = str(position_df.iat[row, col])
+                    item = QTableWidgetItem(value)
+                    
+                    if col == 2:
+                        item.setForeground(QColor(lap_positions[row]['change_color']))
+                        font = item.font()
+                        font.setBold(True)
+                        item.setFont(font)
+                    
+                    item.setTextAlignment(Qt.AlignCenter)
+                    position_table.setItem(row, col, item)
+
+            h_header = position_table.horizontalHeader()
+            h_header.setSectionResizeMode(0, QHeaderView.Fixed)
+            h_header.setSectionResizeMode(1, QHeaderView.Fixed)
+            h_header.setSectionResizeMode(2, QHeaderView.Stretch)
+            position_table.setColumnWidth(0, 80)
+            position_table.setColumnWidth(1, 100)
+
+            position_table.setFixedWidth(500)
+            position_table.setMinimumHeight(200)
+            position_table.setMaximumHeight(400)
+            position_table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+
+            position_table.setStyleSheet("""
+                QTableWidget {
+                    background-color: #bfbec1;
+                    color: #111827;
+                    gridline-color: #27272b;
+                    font-size: 18px;
+                    border-top: 1px solid #27272b;
+                }
+                QTableWidget::item {
+                    background-color: white;
+                    padding: 8px;
+                }
+                QHeaderView::section {
+                    background-color: #6b7280;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 16px;
+                    border: none;
+                    padding: 8px;
+                }
+            """)
+
+            left_column.addWidget(position_table)
+            left_column.addStretch()
+
+            right_column = QVBoxLayout()
+            right_column.setSpacing(20)
+
             track_map_container = QWidget()
             track_map_layout = QVBoxLayout(track_map_container)
             track_map_layout.setContentsMargins(0, 0, 0, 0)
             track_map_layout.setSpacing(5)
 
             track_title = QLabel(venue.upper())
-            track_title.setStyleSheet("font-size: 28px; font-weight: bold; color: #000000;")
+            track_title.setStyleSheet("font-size: 18px; font-weight: bold; color: #000000;")
             track_title.setAlignment(Qt.AlignCenter)
             track_map_layout.addWidget(track_title)
-
-            toggle_layout = QHBoxLayout()
-            toggle_layout.addStretch()
-
-            self.race_overtake_btn = QPushButton("Overtakes")
-            self.race_overtaken_btn = QPushButton("Overtaken")
-            self.race_overtake_btn.setCheckable(True)
-            self.race_overtaken_btn.setCheckable(True)
-            self.race_overtake_btn.setChecked(True)
-            self.race_overtaken_btn.setChecked(True)
-            self.race_overtake_btn.setFixedSize(100, 30)
-            self.race_overtaken_btn.setFixedSize(100, 30)
-
-            toggle_style = """
-                QPushButton {
-                    background-color: %s;
-                    color: white;
-                    border: 2px solid %s;
-                    border-radius: 4px;
-                    font-size: 12px;
-                    font-weight: bold;
-                }
-                QPushButton:checked {
-                    background-color: %s;
-                    border: 2px solid %s;
-                }
-                QPushButton:hover {
-                    opacity: 0.8;
-                }
-            """
-
-            self.race_overtake_btn.setStyleSheet(toggle_style % ("#22c55e", "#22c55e", "#16a34a", "#16a34a"))
-            self.race_overtaken_btn.setStyleSheet(toggle_style % ("#ef4444", "#ef4444", "#dc2626", "#dc2626"))
-
-            self.race_overtake_btn.clicked.connect(self.toggle_race_overtakes)
-            self.race_overtaken_btn.clicked.connect(self.toggle_race_overtaken)
-
-            toggle_layout.addWidget(self.race_overtake_btn)
-            toggle_layout.addWidget(self.race_overtaken_btn)
-
-            track_map_layout.addLayout(toggle_layout)
 
             self.race_track_map_widget = self.make_race_track_map_widget(venue)
             track_map_layout.addWidget(self.race_track_map_widget)
 
-            track_map_container.setFixedSize(650, 550)
-            table.setContentsMargins(0, 0, 0, 0)
-            table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            track_map_container.setFixedSize(620, 550)
 
-            content_layout.addWidget(table, alignment=Qt.AlignTop | Qt.AlignLeft)
-            content_layout.addWidget(track_map_container, alignment=Qt.AlignTop | Qt.AlignLeft)
-            content_layout.addStretch()  
+            right_column.addWidget(track_map_container)
+
+            from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+            from matplotlib.figure import Figure
+            
+            fig = Figure(figsize=(6, 3), facecolor='white')
+            canvas = FigureCanvas(fig)
+            ax = fig.add_subplot(111)
+
+            laps = [p['lap'] for p in lap_positions]
+            positions = [p['position'] for p in lap_positions]
+
+            ax.plot(laps, positions, color='#3b82f6', linewidth=2, marker='o', markersize=6)
+            ax.set_xlabel('Laps', fontsize=12, fontweight='bold')
+            ax.set_ylabel('Position', fontsize=12, fontweight='bold')
+            ax.set_title('Race Position by Lap', fontsize=14, fontweight='bold', pad=10)
+            ax.grid(True, alpha=0.3, linestyle='--')
+            ax.invert_yaxis()  
+            
+            ax.set_xticks(laps)
+            
+            fig.tight_layout()
+
+            canvas.setFixedSize(620, 300)
+            right_column.addWidget(canvas)
+
+            content_layout.addLayout(left_column)
+            content_layout.addLayout(right_column)
+            content_layout.addStretch()
 
             layout.addLayout(content_layout)
-        
-        
+
+
         layout.addStretch()
-            
 
         return page
 
