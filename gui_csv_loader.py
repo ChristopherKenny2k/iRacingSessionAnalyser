@@ -879,10 +879,12 @@ class TelemetryWindow(QWidget):
 
         # -=RACE SPECIFIC: Race Summary Table + Position Tracking=-
         if session_type == "Race":
-            content_layout = QHBoxLayout()
-            content_layout.setSpacing(20)
+            top_layout = QHBoxLayout()
+            top_layout.setSpacing(int(24 * self.scale_factor))
 
-            # -=Race Summary Data=-
+            left_column = QVBoxLayout()
+            left_column.setSpacing(int(24 * self.scale_factor))
+
             df_valid = self.telemetry_df[
                 (self.telemetry_df["Lap"] > 0)
             ].copy()
@@ -921,10 +923,6 @@ class TelemetryWindow(QWidget):
                 race_time_str = f"{hours:02}:{minutes:02}:{seconds:02}"
             else:
                 race_time_str = f"{minutes:02}:{seconds:02}"
-            
-            # -=LEFT COLUMN: Summary Table + Position by Lap Table=-
-            left_column = QVBoxLayout()
-            left_column.setSpacing(20)
 
             race_df = pd.DataFrame({
                 "Metric": [
@@ -970,11 +968,16 @@ class TelemetryWindow(QWidget):
             h_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
             h_header.setSectionResizeMode(1, QHeaderView.Stretch)
 
-            summary_table.setFixedHeight(260)  
-            summary_table.setFixedWidth(500)  
+            actual_height = 0
+            for row in range(summary_table.rowCount()):
+                actual_height += summary_table.rowHeight(row)
+
+            summary_table.setFixedHeight(actual_height + int(4 * self.scale_factor))
+            summary_table.setFixedWidth(int(588 * self.scale_factor))
             summary_table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             summary_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             summary_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            summary_table.setFocusPolicy(Qt.NoFocus)
 
             summary_table.setStyleSheet("""
                 QTableWidget {
@@ -982,11 +985,15 @@ class TelemetryWindow(QWidget):
                     color: #111827;
                     gridline-color: #27272b;
                     font-size: 24px;
-                    border-top: 1px solid #27272b;
+                    border: 2px solid #000000;
                 }
                 QTableWidget::item {
                     background-color: white;
                     padding: 10px;
+                }
+                QTableWidget::item:selected {
+                    background-color: white;
+                    color: #111827;
                 }
                 QHeaderView::section {
                     background-color: #bfbec1;
@@ -1012,9 +1019,9 @@ class TelemetryWindow(QWidget):
                 
                 if len(lap_start_data) > 0:
                     position = int(lap_start_data["PlayerCarClassPosition"].iloc[0])
-
+                    
                     if prev_position is not None:
-                        change = prev_position - position 
+                        change = prev_position - position
                         if change > 0:
                             change_str = f"▲ {change}"
                             change_color = "#22c55e"
@@ -1049,6 +1056,7 @@ class TelemetryWindow(QWidget):
             position_table.setFrameShape(QFrame.NoFrame)
             position_table.setEditTriggers(QTableWidget.NoEditTriggers)
             position_table.setSelectionMode(QTableWidget.NoSelection)
+            position_table.setFocusPolicy(Qt.NoFocus)
 
             for row in range(len(position_df)):
                 for col in range(len(position_df.columns)):
@@ -1068,13 +1076,17 @@ class TelemetryWindow(QWidget):
             h_header.setSectionResizeMode(0, QHeaderView.Fixed)
             h_header.setSectionResizeMode(1, QHeaderView.Fixed)
             h_header.setSectionResizeMode(2, QHeaderView.Stretch)
-            position_table.setColumnWidth(0, 80)
-            position_table.setColumnWidth(1, 100)
+            position_table.setColumnWidth(0, int(94 * self.scale_factor))
+            position_table.setColumnWidth(1, int(118 * self.scale_factor))
 
-            position_table.setFixedWidth(500)
-            position_table.setMinimumHeight(200)
-            position_table.setMaximumHeight(400)
-            position_table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+            header_height = position_table.horizontalHeader().height()
+            actual_height = header_height
+            for row in range(position_table.rowCount()):
+                actual_height += position_table.rowHeight(row)
+
+            position_table.setFixedWidth(int(588 * self.scale_factor))
+            position_table.setFixedHeight(actual_height + int(32 * self.scale_factor))
+            position_table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
             position_table.setStyleSheet("""
                 QTableWidget {
@@ -1082,11 +1094,15 @@ class TelemetryWindow(QWidget):
                     color: #111827;
                     gridline-color: #27272b;
                     font-size: 18px;
-                    border-top: 1px solid #27272b;
+                    border: 2px solid #000000;
                 }
                 QTableWidget::item {
                     background-color: white;
                     padding: 8px;
+                }
+                QTableWidget::item:selected {
+                    background-color: white;
+                    color: #111827;
                 }
                 QHeaderView::section {
                     background-color: #6b7280;
@@ -1099,32 +1115,34 @@ class TelemetryWindow(QWidget):
             """)
 
             left_column.addWidget(position_table)
-            left_column.addStretch()
-
-            right_column = QVBoxLayout()
-            right_column.setSpacing(20)
 
             track_map_container = QWidget()
             track_map_layout = QVBoxLayout(track_map_container)
             track_map_layout.setContentsMargins(0, 0, 0, 0)
-            track_map_layout.setSpacing(5)
+            track_map_layout.setSpacing(int(5 * self.scale_factor))
 
             track_title = QLabel(venue.upper())
             track_title.setStyleSheet("font-size: 18px; font-weight: bold; color: #000000;")
             track_title.setAlignment(Qt.AlignCenter)
             track_map_layout.addWidget(track_title)
 
-            self.race_track_map_widget = self.make_race_track_map_widget(venue)
+            self.race_track_map_widget = self.make_race_track_map_widget(venue, self.scale_factor)
             track_map_layout.addWidget(self.race_track_map_widget)
 
-            track_map_container.setFixedSize(620, 550)
+            track_map_container.setFixedSize(int(729 * self.scale_factor), int(671 * self.scale_factor))
 
-            right_column.addWidget(track_map_container)
+            top_layout.addLayout(left_column)
+            top_layout.addWidget(track_map_container)
+            top_layout.addStretch()
 
-            from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+            layout.addLayout(top_layout)
+
+            from matplotlib.backends.backend_qt5agg import FigureCanvas
             from matplotlib.figure import Figure
             
-            fig = Figure(figsize=(6, 3), facecolor='white')
+            fig_width = 12.94 * self.scale_factor
+            fig_height = 3.53 * self.scale_factor
+            fig = Figure(figsize=(fig_width, fig_height), facecolor='white')
             canvas = FigureCanvas(fig)
             ax = fig.add_subplot(111)
 
@@ -1136,27 +1154,29 @@ class TelemetryWindow(QWidget):
             ax.set_ylabel('Position', fontsize=12, fontweight='bold')
             ax.set_title('Race Position by Lap', fontsize=14, fontweight='bold', pad=10)
             ax.grid(True, alpha=0.3, linestyle='--')
-            ax.invert_yaxis()  
-            
+            ax.invert_yaxis()
             ax.set_xticks(laps)
             
+            ax.spines['top'].set_color('black')
+            ax.spines['bottom'].set_color('black')
+            ax.spines['left'].set_color('black')
+            ax.spines['right'].set_color('black')
+            ax.spines['top'].set_linewidth(2)
+            ax.spines['bottom'].set_linewidth(2)
+            ax.spines['left'].set_linewidth(2)
+            ax.spines['right'].set_linewidth(2)
+
             fig.tight_layout()
 
-            canvas.setFixedSize(620, 300)
-            right_column.addWidget(canvas)
-
-            content_layout.addLayout(left_column)
-            content_layout.addLayout(right_column)
-            content_layout.addStretch()
-
-            layout.addLayout(content_layout)
+            canvas.setFixedSize(int(1341 * self.scale_factor), int(353 * self.scale_factor))
+            layout.addWidget(canvas)
 
 
         layout.addStretch()
 
         return page
 
-    def make_race_track_map_widget(self, venue):
+    def make_race_track_map_widget(self, venue, scale_factor=1.0):
         """Create track map with overtake markers for race overview"""
         from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
         from matplotlib.figure import Figure
@@ -1164,8 +1184,8 @@ class TelemetryWindow(QWidget):
         fig = Figure(figsize=(6, 5.5), facecolor='white', dpi=100)
         canvas = FigureCanvas(fig)
         
-        canvas.setMinimumSize(600, 500)
-        canvas.setMaximumSize(850, 750)
+        canvas.setMinimumSize(int(705 * scale_factor), int(588 * scale_factor))
+        canvas.setMaximumSize(int(999 * scale_factor), int(882 * scale_factor))
         
         ax = fig.add_subplot(111)
         
@@ -1232,8 +1252,17 @@ class TelemetryWindow(QWidget):
                             color='#ef4444', s=150, zorder=3)
 
         ax.set_aspect('equal', adjustable='datalim')
-        ax.axis('off')
-
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.spines['top'].set_color('black')
+        ax.spines['bottom'].set_color('black')
+        ax.spines['left'].set_color('black')
+        ax.spines['right'].set_color('black')
+        ax.spines['top'].set_linewidth(2)
+        ax.spines['bottom'].set_linewidth(2)
+        ax.spines['left'].set_linewidth(2)
+        ax.spines['right'].set_linewidth(2)
+    
         fig.tight_layout(pad=0.1)
 
         ax.autoscale()
@@ -1370,7 +1399,7 @@ class TelemetryWindow(QWidget):
             self.race_track_map_widget.deleteLater()
 
             venue = self.session_info.get("Venue", "Unknown Venue")
-            self.race_track_map_widget = self.make_race_track_map_widget(venue)
+            self.race_track_map_widget = self.make_race_track_map_widget(venue, self.scale_factor)
             parent_layout.addWidget(self.race_track_map_widget)
             
     def update_overview_lap_list(self):
@@ -3559,7 +3588,7 @@ class TelemetryWindow(QWidget):
         main_row.addWidget(lap_selector_wrapper)
 
         map_column = QVBoxLayout()
-        map_column.setSpacing(int(5 * self.scale_factor))
+        map_column.setSpacing(int(9 * self.scale_factor))
 
         toggle_container = QWidget()
         toggle_container.setFixedHeight(int(40 * self.scale_factor))
@@ -4059,7 +4088,7 @@ class TelemetryWindow(QWidget):
         ax_map.set_yticks([])
         ax_map.set_xlim(lap_data["Lon"].min() - 0.0005, lap_data["Lon"].max() + 0.0005)
         ax_map.set_ylim(lap_data["Lat"].min() - 0.0005, lap_data["Lat"].max() + 0.0005)
-        fig_map.subplots_adjust(left=0.01, right=0.99, top=0.98, bottom=0.01)
+        fig_map.subplots_adjust(left=0.01, right=0.99, top=0.95, bottom=0.01)
 
 
         self.map_canvas = ZoomableCanvas(fig_map)
