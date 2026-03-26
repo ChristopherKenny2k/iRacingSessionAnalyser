@@ -682,14 +682,14 @@ class TelemetryWindow(QWidget):
         layout.addWidget(env_bar)
         layout.addSpacing(10)
 
-        # -=QUALIFYING SPECIFIC: Best Lap Card + Track Map=-
+        # -=QUALIFYING SPECIFIC=-
         if session_type == "Qualifying":
             quali_content_layout = QHBoxLayout()
-            quali_content_layout.setSpacing(20)
+            quali_content_layout.setSpacing(int(24 * self.scale_factor))
             
             best_lap_card = QWidget()
-            best_lap_card.setFixedWidth(500)
-            best_lap_card.setFixedHeight(200)
+            best_lap_card.setFixedWidth(int(691 * self.scale_factor))
+            best_lap_card.setFixedHeight(int(276 * self.scale_factor))
             best_lap_card.setStyleSheet("""
                 QWidget {
                     background-color: #f8f9fa;
@@ -699,11 +699,12 @@ class TelemetryWindow(QWidget):
             """)
             
             best_lap_layout = QVBoxLayout(best_lap_card)
-            best_lap_layout.setContentsMargins(20, 15, 20, 15)
-            best_lap_layout.setSpacing(10)
+            best_lap_layout.setContentsMargins(int(24 * self.scale_factor), int(18 * self.scale_factor), 
+                                                int(24 * self.scale_factor), int(18 * self.scale_factor))
+            best_lap_layout.setSpacing(int(12 * self.scale_factor))
             
             card_title = QLabel("🏆 Best Qualifying Lap")
-            card_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #000000;")
+            card_title.setStyleSheet(f"font-size: 22px; font-weight: bold; color: #000000;")
             best_lap_layout.addWidget(card_title)
             
             if hasattr(self, 'lap_timings') and len(self.lap_timings) > 0:
@@ -714,7 +715,7 @@ class TelemetryWindow(QWidget):
                     
                     # Best lap time
                     best_time_label = QLabel(f"Lap {best_lap_num}: {best_lap_data['time_str']}")
-                    best_time_label.setStyleSheet("font-size: 32px; font-weight: bold; color: #111827;")
+                    best_time_label.setStyleSheet(f"font-size: {int(32 * self.scale_factor)}px; font-weight: bold; color: #111827;")
                     best_lap_layout.addWidget(best_time_label)
                     
                     # Sector times
@@ -738,7 +739,7 @@ class TelemetryWindow(QWidget):
                     s3_str = f"{s3_min:02}:{s3_sec:02}.{s3_ms:03}"
                     
                     sectors_label = QLabel(f"Sector 1: {s1_str}  |  Sector 2: {s2_str}  |  Sector 3: {s3_str}")
-                    sectors_label.setStyleSheet("font-size: 14px; color: #374151;")
+                    sectors_label.setStyleSheet(f"font-size: {int(18 * self.scale_factor)}px; color: #374151;")
                     best_lap_layout.addWidget(sectors_label)
             else:
                 self.calculate_lap_timings()
@@ -748,7 +749,7 @@ class TelemetryWindow(QWidget):
                     best_lap_data = valid_laps[best_lap_num]
                     
                     best_time_label = QLabel(f"Lap {best_lap_num}: {best_lap_data['time_str']}")
-                    best_time_label.setStyleSheet("font-size: 32px; font-weight: bold; color: #111827;")
+                    best_time_label.setStyleSheet(f"font-size: {int(32 * self.scale_factor)}px; font-weight: bold; color: #111827;")
                     best_lap_layout.addWidget(best_time_label)
                     
                     sector1_time = best_lap_data['sector1']
@@ -771,18 +772,17 @@ class TelemetryWindow(QWidget):
                     s3_str = f"{s3_min:02}:{s3_sec:02}.{s3_ms:03}"
                     
                     sectors_label = QLabel(f"Sector 1: {s1_str}  |  Sector 2: {s2_str}  |  Sector 3: {s3_str}")
-                    sectors_label.setStyleSheet("font-size: 14px; color: #374151;")
+                    sectors_label.setStyleSheet(f"font-size: {int(32 * self.scale_factor)}px; color: #374151;")
                     best_lap_layout.addWidget(sectors_label)
                 else:
                     no_data_label = QLabel("No valid lap data available")
-                    no_data_label.setStyleSheet("font-size: 16px; color: #6b7280;")
+                    no_data_label.setStyleSheet(f"font-size: {int(24 * self.scale_factor)}px; color: #6b7280;")
                     best_lap_layout.addWidget(no_data_label)
             
             best_lap_layout.addStretch()
             
-            # -=Track Map=-
-            track_map = self.make_track_map_widget(venue)
-            track_map.setFixedSize(900, 750) 
+            track_map = self.make_track_map_widget(venue, self.scale_factor)
+            track_map.setFixedSize(int(729 * self.scale_factor), int(671 * self.scale_factor))
             track_map.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             
             quali_content_layout.addWidget(best_lap_card, alignment=Qt.AlignTop | Qt.AlignLeft)
@@ -791,13 +791,11 @@ class TelemetryWindow(QWidget):
             
             layout.addLayout(quali_content_layout)
 
-        # -=PRACTICE SPECIFIC: Table and Track Map=-
+        # -=PRACTICE SPECIFIC=-
         if session_type == "Practice":
-            # -=Horizontal layout for table and track map=-
             content_layout = QHBoxLayout()
             content_layout.setSpacing(20)
 
-            # -=Table Data=-
             df_valid = self.telemetry_df[
                 (self.telemetry_df["Lap"] > 0) &
                 (self.telemetry_df["LapLastLapTime"] > 0)
@@ -816,7 +814,6 @@ class TelemetryWindow(QWidget):
                 "Value": [laps_completed, fastest_lap_formatted, fastest_lap_on]
             })
 
-            # -=Table Widget=-
             table = QTableWidget(len(overview_df), len(overview_df.columns))
             table.horizontalHeader().setVisible(False)
             table.verticalHeader().setVisible(False)
@@ -824,7 +821,6 @@ class TelemetryWindow(QWidget):
             table.setEditTriggers(QTableWidget.NoEditTriggers)
             table.setSelectionMode(QTableWidget.NoSelection)
 
-            # Fill table
             for row in range(len(overview_df)):
                 for col in range(len(overview_df.columns)):
                     item = QTableWidgetItem(str(overview_df.iat[row, col]))
@@ -832,12 +828,10 @@ class TelemetryWindow(QWidget):
                         item.setFlags(Qt.ItemIsEnabled)
                     table.setItem(row, col, item)
 
-            # Column sizing
             h_header = table.horizontalHeader()
             h_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
             h_header.setSectionResizeMode(1, QHeaderView.Stretch)
 
-            # Set fixed table size
             table.setFixedHeight(150) 
             table.setFixedWidth(500)  
             table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -866,9 +860,8 @@ class TelemetryWindow(QWidget):
                 }
             """)
 
-            # -=Track Map=-
-            track_map = self.make_track_map_widget(venue)
-            track_map.setFixedSize(600, 500) 
+            track_map = self.make_track_map_widget(venue, self.scale_factor)
+            track_map.setFixedSize(int(900 * self.scale_factor), int(750 * self.scale_factor)) 
             table.setContentsMargins(0, 0, 0, 0)
             table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             content_layout.addWidget(table, alignment=Qt.AlignTop | Qt.AlignLeft)
@@ -877,7 +870,7 @@ class TelemetryWindow(QWidget):
 
             layout.addLayout(content_layout)
 
-        # -=RACE SPECIFIC: Race Summary Table + Position Tracking=-
+        # -=RACE SPECIFIC=-
         if session_type == "Race":
             top_layout = QHBoxLayout()
             top_layout.setSpacing(int(24 * self.scale_factor))
@@ -1377,6 +1370,83 @@ class TelemetryWindow(QWidget):
                 canvas.draw_idle()
         
         canvas.mpl_connect('motion_notify_event', on_hover)
+        
+        return canvas
+    
+    def make_track_map_widget(self, venue, scale_factor=1.0):
+        """Create simple track map for Practice/Qualifying (no scale factor needed for these)"""
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+        from matplotlib.figure import Figure
+        
+        fig = Figure(figsize=(6, 5.5), facecolor='#BFBEC1', dpi=100)
+        canvas = FigureCanvas(fig)
+
+        canvas.setStyleSheet("background-color: #BFBEC1;")
+
+        canvas.setMinimumSize(int(705 * scale_factor), int(588 * scale_factor))
+        canvas.setMaximumSize(int(999 * scale_factor), int(882 * scale_factor))
+    
+        ax = fig.add_subplot(111)
+        
+        # Get a clean lap for track outline
+        available_laps = sorted(self.telemetry_df["Lap"].unique())
+        target_lap = None
+        for lap in [3, 4, 2, 5]:
+            if lap in available_laps:
+                target_lap = lap
+                break
+        
+        if target_lap is None and len(available_laps) > 0:
+            target_lap = available_laps[0]
+        
+        lap_data = self.telemetry_df[self.telemetry_df["Lap"] == target_lap].sort_values("SessionTime")
+        
+        if len(lap_data) > 0:
+            lat = lap_data["Lat"].values
+            lon = lap_data["Lon"].values
+            
+            # Plot track
+            ax.plot(lon, lat, color='black', linewidth=4, zorder=1)
+            
+            # Add start/finish line
+            start_lat = lat[0]
+            start_lon = lon[0]
+            
+            if len(lat) > 1:
+                dx = lon[1] - lon[0]
+                dy = lat[1] - lat[0]
+                perp_dx = -dy
+                perp_dy = dx
+                length = (perp_dx**2 + perp_dy**2)**0.5
+                if length > 0:
+                    perp_dx /= length
+                    perp_dy /= length
+                    scale = 0.0002
+                    perp_dx *= scale
+                    perp_dy *= scale
+                    
+                    ax.plot([start_lon - perp_dx, start_lon + perp_dx],
+                        [start_lat - perp_dy, start_lat + perp_dy],
+                        color='red', linewidth=3, zorder=4)
+                    
+        ax.set_title(venue.upper(), fontsize=18, fontweight='bold', color='#000000', pad=10)
+    
+        ax.set_aspect('equal', adjustable='datalim')
+        
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_facecolor('#f3f4f6')
+
+        ax.spines['top'].set_color('black')
+        ax.spines['bottom'].set_color('black')
+        ax.spines['left'].set_color('black')
+        ax.spines['right'].set_color('black')
+        ax.spines['top'].set_linewidth(2)
+        ax.spines['bottom'].set_linewidth(2)
+        ax.spines['left'].set_linewidth(2)
+        ax.spines['right'].set_linewidth(2)
+        
+        fig.tight_layout(pad=0.3)
         
         return canvas
 
