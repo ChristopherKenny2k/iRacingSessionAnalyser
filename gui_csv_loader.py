@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QListWidget,
     QListWidgetItem,
+    QStyledItemDelegate,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QSize
@@ -38,7 +39,6 @@ from PySide6.QtGui import QFont
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QPalette
 from PySide6.QtGui import QCursor
-
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -130,6 +130,16 @@ class ZoomableCanvas(FigureCanvas):
             self.draw()
 
 #----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+class ColorDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        # Get the background color from the item's data
+        bg_color = index.data(Qt.ItemDataRole.BackgroundRole)
+        
+        if bg_color:
+            painter.fillRect(option.rect, bg_color)
+        
+        # Call parent to paint the text
+        super().paint(painter, option, index)
 
 # ----------------------
 # Full-screen window after CSV load
@@ -1616,6 +1626,42 @@ class TelemetryWindow(QWidget):
         table_title.setStyleSheet("font-size: 18px; font-weight: bold; color: #000000;")
         table_layout.addWidget(table_title)
 
+        legend_layout = QHBoxLayout()
+        legend_layout.setSpacing(15)
+        legend_layout.setContentsMargins(0, 5, 0, 5)
+
+        legend_items = [
+            ("#fef08a", "In-Lap"),
+            ("#bfdbfe", "Out-Lap"),
+            ("#d4edda", "Best Lap")
+        ]
+
+        for color, label in legend_items:
+            item_layout = QHBoxLayout()
+            item_layout.setSpacing(5)
+            
+            # Color box
+            color_box = QLabel()
+            color_box.setFixedSize(20, 20)
+            color_box.setStyleSheet(f"""
+                background-color: {color};
+                border: 1px solid #d1d5db;
+                border-radius: 3px;
+            """)
+            
+            # Label
+            text_label = QLabel(label)
+            text_label.setStyleSheet("font-size: 12px; color: #111827;")
+            
+            item_layout.addWidget(color_box)
+            item_layout.addWidget(text_label)
+            
+            legend_layout.addLayout(item_layout)
+
+        legend_layout.addStretch()
+
+        table_layout.addLayout(legend_layout)
+
         self.timing_table = self.create_timing_table()
         table_layout.addWidget(self.timing_table)
 
@@ -1722,6 +1768,21 @@ class TelemetryWindow(QWidget):
             if len(lap_data) == 0:
                 continue
 
+            # Check for pit laps
+            lap_data_sorted = lap_data.sort_values("SessionTime")
+            # Add debug logging
+            print(f"\n=== Lap {lap} Pit Road Check ===")
+            print(f"OnPitRoad at start: {lap_data_sorted['OnPitRoad'].iloc[0]}")
+            print(f"OnPitRoad at end: {lap_data_sorted['OnPitRoad'].iloc[-1]}")
+            print(f"OnPitRoad unique values: {lap_data_sorted['OnPitRoad'].unique()}")
+            print(f"OnPitRoad value counts:\n{lap_data_sorted['OnPitRoad'].value_counts()}")
+
+            is_outlap = lap_data_sorted["OnPitRoad"].iloc[0] == 1  # Starts on pit road
+            is_inlap = lap_data_sorted["OnPitRoad"].iloc[-1] == 1  # Ends on pit road
+
+            print(f"is_outlap: {is_outlap}")
+            print(f"is_inlap: {is_inlap}")
+
             # iRacing does not report lap time of last lap in session due to cooldown lap not being fully completed, 
             # therefore i use session ticks (60 per second) to calculate the time (usually off by +- .006s)
             lap_time_rows = self.telemetry_df[
@@ -1743,8 +1804,7 @@ class TelemetryWindow(QWidget):
             is_on_track = (lap_data["IsOnTrack"] == 1).all()
 
             # Check for distance anomalies (going backwards or off track)
-            lap_data_sorted_by_time = lap_data.sort_values("SessionTime")
-            dist_pct = lap_data_sorted_by_time["LapDistPct"].values
+            dist_pct = lap_data_sorted["LapDistPct"].values
             is_monotonic = True
             if len(dist_pct) > 1:
                 for i in range(1, len(dist_pct)):
@@ -1753,7 +1813,7 @@ class TelemetryWindow(QWidget):
                         break
 
             # check for if car has gone off track or not to count a valid lap
-            speeds = lap_data_sorted_by_time["Speed"].values * 3.6 
+            speeds = lap_data_sorted["Speed"].values * 3.6 
             has_speed_anomaly = False
             if len(speeds) > 10:
                 slow_count = (speeds < 20).sum()
@@ -1761,37 +1821,32 @@ class TelemetryWindow(QWidget):
                     has_speed_anomaly = True
 
             is_valid = is_on_track and is_monotonic and not has_speed_anomaly
-           
+        
             print(f"\n=== Lap {lap} Validity Check ===")
             print(f"is_on_track: {is_on_track}")
             print(f"is_monotonic: {is_monotonic}")
-            print(f"IsOnTrackCar values: {lap_data['IsOnTrackCar'].value_counts().to_dict()}")
-            print(f"LapDistPct range: {dist_pct.min():.2f} to {dist_pct.max():.2f}")
+            print(f"is_outlap: {is_outlap}")
+            print(f"is_inlap: {is_inlap}")
             print(f"Final is_valid: {is_valid}")
 
             # Calculate sector times based on LapDistPct
-            lap_data_sorted = lap_data.sort_values("SessionTime").reset_index(drop=True)
-
             if len(lap_data_sorted) > 0:
                 lap_start_time = lap_data_sorted["SessionTime"].iloc[0]
                 lap_end_time = lap_data_sorted["SessionTime"].iloc[-1]
                 
-                # Find times at sector boundaries by finding closest LapDistPct
-                # Sector 1 ends at 33.33%
+                # Find times at sector boundaries
                 sector1_rows = lap_data_sorted[lap_data_sorted["LapDistPct"] <= 33.33]
                 if len(sector1_rows) > 0:
                     sector1_end_time = sector1_rows["SessionTime"].iloc[-1]
                 else:
                     sector1_end_time = lap_start_time
                 
-                # Sector 2 ends at 66.66%
                 sector2_rows = lap_data_sorted[lap_data_sorted["LapDistPct"] <= 66.66]
                 if len(sector2_rows) > 0:
                     sector2_end_time = sector2_rows["SessionTime"].iloc[-1]
                 else:
                     sector2_end_time = sector1_end_time
                 
-                # Calculate sector times
                 sector1_time = sector1_end_time - lap_start_time
                 sector2_time = sector2_end_time - sector1_end_time
                 sector3_time = lap_end_time - sector2_end_time
@@ -1812,7 +1867,9 @@ class TelemetryWindow(QWidget):
                 'sector1': sector1_time,
                 'sector2': sector2_time,
                 'sector3': sector3_time,
-                'is_valid': is_valid
+                'is_valid': is_valid,
+                'is_outlap': is_outlap,
+                'is_inlap': is_inlap
             }
 
         # Remove the last lap (incomplete cooldown lap) BEFORE finding best lap
@@ -1821,9 +1878,10 @@ class TelemetryWindow(QWidget):
             if last_lap in self.lap_timings:
                 del self.lap_timings[last_lap]
 
-        # Find best lap (OUTSIDE the loop)
+        # Find best lap (OUTSIDE the loop) - exclude pit laps
         valid_lap_times = {lap: data['time'] for lap, data in self.lap_timings.items() 
-                        if data['is_valid'] and data['time'] != float('inf')}
+                        if data['is_valid'] and data['time'] != float('inf') 
+                        and not data['is_outlap'] and not data['is_inlap']}
         
         if valid_lap_times:
             self.best_lap = min(valid_lap_times, key=valid_lap_times.get)
@@ -1963,7 +2021,7 @@ class TelemetryWindow(QWidget):
         fig = Figure(figsize=(2, 4), facecolor='#bfbec1')
         ax = fig.add_subplot(111)
 
-        # Create colourbar
+
         norm = Normalize(vmin=min_speed, vmax=max_speed)
         cmap = cm.get_cmap('RdYlGn')
         
@@ -2005,13 +2063,13 @@ class TelemetryWindow(QWidget):
         layout.setContentsMargins(20, 15, 20, 15)
         layout.setSpacing(40)
 
-        #POTENTIAL TODO: check for variable of penalty points accrued over session could be added to score (only in RACE scenario)
-        # SESSION statistics calculations
         valid_times = [data['time'] for data in self.lap_timings.values() 
-                    if data['is_valid'] and data['time'] != float('inf')]
+                    if data['is_valid'] 
+                    and data['time'] != float('inf')
+                    and not data.get('is_outlap', False) 
+                    and not data.get('is_inlap', False)]
         
         if len(valid_times) == 0:
-            # case of no valid laps being set
             no_data_label = QLabel("No valid laps recorded")
             no_data_label.setStyleSheet("font-size: 16px; color: #6b7280;")
             layout.addWidget(no_data_label)
@@ -2023,43 +2081,38 @@ class TelemetryWindow(QWidget):
         average_time = np.mean(valid_times)
         median_time = np.median(valid_times)
         std_dev = np.std(valid_times)
-        
-        total_laps = len(self.lap_timings)
+
+        total_laps = len([data for data in self.lap_timings.values() 
+                        if not data.get('is_outlap', False) 
+                        and not data.get('is_inlap', False)])
         valid_laps = len(valid_times)
         valid_percentage = (valid_laps / total_laps * 100) if total_laps > 0 else 0
 
-        # Format times
         def format_time(seconds):
             minutes = int(seconds // 60)
             secs = int(seconds % 60)
             millis = int((seconds - int(seconds)) * 1000)
             return f"{minutes:02}:{secs:02}.{millis:03}"
 
-        # consistency score calculation
         consistency_grade, grade_color = self.calculate_consistency_grade(std_dev, valid_percentage)
 
-        # Fastest Lap
         fastest_widget = self.create_stat_widget("Fastest Lap", 
                                                 f"{format_time(fastest_time)}\n(Lap {self.best_lap})")
         layout.addWidget(fastest_widget)
 
-        # Average Lap
         average_widget = self.create_stat_widget("Average Lap", format_time(average_time))
         layout.addWidget(average_widget)
 
-        # Median Lap
         median_widget = self.create_stat_widget("Median Lap", format_time(median_time))
         layout.addWidget(median_widget)
 
-        # Standard Deviation
+
         std_dev_widget = self.create_stat_widget("Std Deviation", f"±{std_dev:.3f}s")
         layout.addWidget(std_dev_widget)
 
-        # Valid Laps (x/y) 
         valid_widget = self.create_stat_widget("Valid Laps", f"{valid_laps} / {total_laps}\n({valid_percentage:.0f}%)")
         layout.addWidget(valid_widget)
 
-        # Consistency Grade awarded
         grade_widget = QWidget()
         grade_layout = QVBoxLayout(grade_widget)
         grade_layout.setSpacing(3)
@@ -2106,9 +2159,7 @@ class TelemetryWindow(QWidget):
 
         return widget
     
-    # CONSITENCY SCORE MATRIX FUNCTION (potential tweaking necessary in case of unrealistic goals/expectations potential add an SS+ grade r sth)
     def calculate_consistency_grade(self, std_dev, valid_percentage):
-        # Lap time consistency score
         if std_dev < 0.1:
             time_score = 100
         elif std_dev < 0.2:
@@ -2124,7 +2175,6 @@ class TelemetryWindow(QWidget):
         else:
             time_score = 50
 
-        # Valid lap percentage score
         if valid_percentage >= 100:
             valid_score = 100
         elif valid_percentage >= 90:
@@ -2140,54 +2190,59 @@ class TelemetryWindow(QWidget):
         else:
             valid_score = 45
 
-        # Combined score (60% time, 40% valid)
         final_score = (time_score * 0.6) + (valid_score * 0.4)
 
-        # Assign grade
         if final_score >= 95:
             grade = "S+"
-            color = "#ffd700"  # Gold
+            color = "#ffd700"  
         elif final_score >= 90:
             grade = "S"
-            color = "#c0c0c0"  # Silver
+            color = "#c0c0c0" 
         elif final_score >= 85:
             grade = "A+"
-            color = "#90EE90"  # Light green
+            color = "#90EE90"  
         elif final_score >= 80:
             grade = "A"
-            color = "#98FB98"  # Pale green
+            color = "#98FB98" 
         elif final_score >= 70:
             grade = "B"
-            color = "#87CEEB"  # Sky blue
+            color = "#87CEEB" 
         elif final_score >= 60:
             grade = "C"
-            color = "#FFD580"  # Light orange
+            color = "#FFD580"  
         else:
             grade = "D"
-            color = "#FFB6C1"  # Light pink
+            color = "#FFB6C1"  
 
         return grade, color
 
     def create_timing_table(self):
         table = QTableWidget()
+
+        delegate = ColorDelegate(table)
+        table.setItemDelegate(delegate)
         
-        # Set up table
-        headers = ["Lap", "Lap Time", "Sector 1", "Sector 2", "Sector 3", "Delta", "Valid"]
+        headers = ["Lap", "Lap Time", "Sector 1", "Sector 2", "Sector 3", "Delta", "Pit", "Valid"]
         table.setColumnCount(len(headers))
         table.setHorizontalHeaderLabels(headers)
         table.setRowCount(len(self.lap_timings))
 
-        # Enable sorting
+        table.setAlternatingRowColors(False)
+        
         table.setSortingEnabled(False)  
 
-        # Style table
         table.setStyleSheet("""
             QTableWidget {
-                background-color: white;
                 gridline-color: #e5e7eb;
                 font-size: 16px;
                 border: 1px solid #d1d5db;
                 border-radius: 4px;
+                background-color: white;
+            }
+            QTableWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid #f3f4f6;
+                color: #000000;
             }
             QHeaderView::section {
                 background-color: #f3f4f6;
@@ -2199,16 +2254,11 @@ class TelemetryWindow(QWidget):
                 border-bottom: 2px solid #9ca3af;
                 padding: 8px;
             }
-            QTableWidget::item {
-                padding: 8px;
-                border-bottom: 1px solid #f3f4f6;
-                color: #000000;
-            }
-            QTableWidget::item:selected {
-                background-color: #dbeafe;
-                color: #111827;
-            }
         """)
+
+        palette = table.palette()
+        palette.setColor(QPalette.ColorRole.Base, QColor(255, 255, 255))
+        table.setPalette(palette)
 
         table.horizontalHeader().setStretchLastSection(False)
         table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
@@ -2218,27 +2268,25 @@ class TelemetryWindow(QWidget):
         table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
         table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
+        table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
 
         table.setColumnWidth(0, int(70 * self.scale_factor))
         table.setColumnWidth(6, int(70 * self.scale_factor))
+        table.setColumnWidth(7, int(70 * self.scale_factor))
 
         table.verticalHeader().setVisible(False)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
 
-        # Populate table
         for row, (lap, data) in enumerate(sorted(self.lap_timings.items())):
-            # Lap number
             lap_item = QTableWidgetItem()
-            lap_item.setData(Qt.DisplayRole, lap) 
+            lap_item.setData(Qt.ItemDataRole.DisplayRole, lap) 
             lap_item.setTextAlignment(Qt.AlignCenter)
             
-            # Lap time
             time_item = QTableWidgetItem(data['time_str'])
             time_item.setTextAlignment(Qt.AlignCenter)
             
-            # Sector times
             def format_sector(seconds):
                 if seconds == 0:
                     return "—"
@@ -2253,23 +2301,21 @@ class TelemetryWindow(QWidget):
             s3_item = QTableWidgetItem(format_sector(data['sector3']))
             s3_item.setTextAlignment(Qt.AlignCenter)
             
-            # Delta
             delta_item = QTableWidgetItem(data.get('delta_str', '—'))
             delta_item.setTextAlignment(Qt.AlignCenter)
             
-            # Valid
+            if data.get('is_outlap', False):
+                pit_text = "OUT"
+            elif data.get('is_inlap', False):
+                pit_text = "IN"
+            else:
+                pit_text = "—"
+            
+            pit_item = QTableWidgetItem(pit_text)
+            pit_item.setTextAlignment(Qt.AlignCenter)
+            
             valid_item = QTableWidgetItem("✓" if data['is_valid'] else "✗")
             valid_item.setTextAlignment(Qt.AlignCenter)
-            
-            # Highlight best lap
-            if self.best_lap is not None and lap == self.best_lap:
-                for item in [lap_item, time_item, s1_item, s2_item, s3_item, delta_item, valid_item]:
-                    item.setBackground(QColor("#d4edda")) 
-            
-            # Gray out invalid laps
-            if not data['is_valid']:
-                for item in [lap_item, time_item, s1_item, s2_item, s3_item, delta_item, valid_item]:
-                    item.setForeground(QColor("#9ca3af"))
             
             table.setItem(row, 0, lap_item)
             table.setItem(row, 1, time_item)
@@ -2277,9 +2323,27 @@ class TelemetryWindow(QWidget):
             table.setItem(row, 3, s2_item)
             table.setItem(row, 4, s3_item)
             table.setItem(row, 5, delta_item)
-            table.setItem(row, 6, valid_item)
+            table.setItem(row, 6, pit_item)
+            table.setItem(row, 7, valid_item)
+            
+            if data.get('is_outlap', False):
+                bg_color = QColor(191, 219, 254) 
+            elif data.get('is_inlap', False):
+                bg_color = QColor(254, 240, 138) 
+            elif self.best_lap is not None and lap == self.best_lap:
+                bg_color = QColor(212, 237, 218)  
+            else:
+                bg_color = QColor(255, 255, 255) 
+            
+            for col in range(8):
+                item = table.item(row, col)
+                if item:
+                    item.setData(Qt.ItemDataRole.BackgroundRole, bg_color)
+            
+            if not data['is_valid']:
+                for col in range(8):
+                    table.item(row, col).setForeground(QColor(156, 163, 175))
 
-        # Enable sorting after populating
         table.setSortingEnabled(True)
         table.sortItems(0, Qt.AscendingOrder)  
 
@@ -2297,7 +2361,6 @@ class TelemetryWindow(QWidget):
         lap_item = self.timing_table.item(row, 0)
         selected_lap = int(lap_item.text())
         
-        #redraw map after user selects a lap in lap selector
         self.draw_timing_map_for_lap(selected_lap)
     
     def toggle_timing_map_mode(self, mode):
@@ -2318,10 +2381,8 @@ class TelemetryWindow(QWidget):
             self.speed_map_unit_kmh.setChecked(False)
             self.speed_map_unit_mph.setChecked(True)
         
-        # Store the preference
         self.speed_map_unit = unit
         
-        # Redraw map with current lap selection
         selected_items = self.timing_table.selectedItems()
         if selected_items:
             row = selected_items[0].row()
@@ -2336,7 +2397,6 @@ class TelemetryWindow(QWidget):
         from matplotlib.collections import LineCollection
         import numpy as np
 
-        # clear map
         while self.timing_map_layout.count():
             child = self.timing_map_layout.takeAt(0)
             if child.widget():
@@ -2349,17 +2409,13 @@ class TelemetryWindow(QWidget):
             self.timing_map_layout.addWidget(error_label)
             return
 
-        # Use selected lap or default to best lap
         if selected_lap is None:
             selected_lap = self.best_lap
 
-        # Check if selected lap exists in lap_timings (might have been deleted if it was incomplete)
         if selected_lap not in self.lap_timings:
-            # Fall back to best lap
             if self.best_lap and self.best_lap in self.lap_timings:
                 selected_lap = self.best_lap
             else:
-                # Just use any valid lap
                 if len(self.lap_timings) > 0:
                     selected_lap = min(self.lap_timings.keys())
                 else:
@@ -2369,7 +2425,6 @@ class TelemetryWindow(QWidget):
                     self.timing_map_layout.addWidget(error_label)
                     return
 
-        # Get Selected Lap data
         lap_data = self.telemetry_df[
             (self.telemetry_df["Lap"] == selected_lap) &
             (self.telemetry_df["IsOnTrackCar"] == 1)
@@ -2384,7 +2439,6 @@ class TelemetryWindow(QWidget):
 
         lap_data = lap_data.sort_values("LapDistPct").reset_index(drop=True)
 
-        # Create figure
         fig = Figure(figsize=(8, 8), facecolor='#bfbec1')
         ax = fig.add_subplot(111)
 
@@ -2392,11 +2446,9 @@ class TelemetryWindow(QWidget):
         segments = np.concatenate([points[:-1], points[1:]], axis=1)
 
         if self.timing_map_delta.isChecked():
-            # Delta mode - compare to best lap
             if selected_lap == self.best_lap:
                 colors = ['#22c55e'] * len(segments)
             else:
-                # compare selected lap to best lap
                 best_lap_data = self.telemetry_df[
                     (self.telemetry_df["Lap"] == self.best_lap) &
                     (self.telemetry_df["IsOnTrackCar"] == 1)
@@ -2407,10 +2459,8 @@ class TelemetryWindow(QWidget):
                     current_dist = lap_data["LapDistPct"].iloc[i]
                     current_time = lap_data["SessionTime"].iloc[i] - lap_data["SessionTime"].iloc[0]
                     
-                    # find corresponding point in best lap
                     best_idx = (best_lap_data["LapDistPct"] - current_dist).abs().idxmin()
                     best_time = best_lap_data["SessionTime"].iloc[best_idx] - best_lap_data["SessionTime"].iloc[0]
-                    #delta colour scheme
                     if current_time < best_time:
                         colors.append('#22c55e') 
                     else:
@@ -2427,14 +2477,11 @@ class TelemetryWindow(QWidget):
             
             speeds_kmh = lap_data["Speed"].values * 3.6 
             
-            # Get max speed across all laps for consistent scale
             all_speeds = self.telemetry_df["Speed"].values * 3.6
             max_speed = all_speeds.max()
             min_speed = 0
             
-            # Normalize speeds
             norm = Normalize(vmin=min_speed, vmax=max_speed)
-            ## COLOUR SCHEME for legend green->red
             cmap = cm.get_cmap('RdYlGn') 
             
             colors = [cmap(norm(speed)) for speed in speeds_kmh[:-1]]
@@ -2445,7 +2492,6 @@ class TelemetryWindow(QWidget):
         lc = LineCollection(segments, colors=colors, linewidths=4)
         ax.add_collection(lc)
 
-        # Start/finish line black
         start_lon = lap_data["Lon"].iloc[0]
         start_lat = lap_data["Lat"].iloc[0]
         second_lon = lap_data["Lon"].iloc[1]
@@ -2476,13 +2522,11 @@ class TelemetryWindow(QWidget):
         ax.set_ylim(lap_data["Lat"].min() - 0.0005, lap_data["Lat"].max() + 0.0005)
         fig.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02)
 
-        # Create canvas
         canvas = FigureCanvas(fig)
         canvas.setMinimumSize(int(450 * self.scale_factor), int(450 * self.scale_factor))
         canvas.setMaximumSize(int(900 * self.scale_factor), int(900 * self.scale_factor))
         canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        # Create horizontal layout for map + legend
         map_legend_container = QWidget()
         map_legend_layout = QHBoxLayout(map_legend_container)
         map_legend_layout.setContentsMargins(0, 0, 0, 0)
@@ -2490,16 +2534,13 @@ class TelemetryWindow(QWidget):
 
         map_legend_layout.addWidget(canvas)
 
-        # Add legend
         if legend_items is not None:
             legend_widget = self.create_map_legend(legend_items, legend_title)
-            # Add some top spacing
             spacer = QWidget()
             spacer.setFixedHeight(int(50 * self.scale_factor))
             map_legend_layout.addWidget(spacer)
             map_legend_layout.addWidget(legend_widget, alignment=Qt.AlignTop)
         else:
-            # Continuous legend for speed mode
             colourbar_widget = self.create_speed_colourbar(min_speed, max_speed, self.speed_map_unit)
             map_legend_layout.addWidget(colourbar_widget, alignment=Qt.AlignTop)
 
@@ -2556,6 +2597,7 @@ class TelemetryWindow(QWidget):
         from matplotlib.figure import Figure
         import matplotlib.pyplot as plt
         from matplotlib.ticker import FuncFormatter
+        from matplotlib.collections import LineCollection
         import numpy as np
         
         sorted_laps = sorted(self.lap_timings.keys())
@@ -2571,29 +2613,41 @@ class TelemetryWindow(QWidget):
         
         fig = Figure(figsize=(12, 4), facecolor='#f8f9fa')
         ax = fig.add_subplot(111)
-       
-        ax.plot(lap_numbers, lap_times, color='#2563eb', linewidth=2, marker='o', 
-                markersize=8, markerfacecolor='#2563eb', markeredgecolor='white', 
-                markeredgewidth=2, zorder=3)
-     
-        best_lap_idx = lap_numbers.index(self.best_lap)
-        ax.plot(self.best_lap, lap_times[best_lap_idx], 'o', markersize=14, 
-                markerfacecolor='#22c55e', markeredgecolor='white', 
-                markeredgewidth=2, zorder=4)
+    
+        points = np.array([lap_numbers, lap_times]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
         
-        # Highlight slowest lap (red)
-        slowest_lap = max(self.lap_timings.keys(), key=lambda x: self.lap_timings[x]['time'])
-        slowest_lap_idx = lap_numbers.index(slowest_lap)
-        ax.plot(slowest_lap, lap_times[slowest_lap_idx], 'o', markersize=14, 
-                markerfacecolor='#ef4444', markeredgecolor='white', 
-                markeredgewidth=2, zorder=4)
+        colors = []
+        for i in range(len(lap_times) - 1):
+            if lap_times[i+1] < lap_times[i]:  
+                colors.append('#22c55e') 
+            else: 
+                colors.append('#ef4444')  
+        
+        lc = LineCollection(segments, colors=colors, linewidths=2, zorder=2)
+        ax.add_collection(lc)
+        
+        for i, (lap_num, lap_time) in enumerate(zip(lap_numbers, lap_times)):
+            lap_data = self.lap_timings[lap_num]
+            
+            # in r out lap
+            if lap_data.get('is_outlap', False) or lap_data.get('is_inlap', False):
+                ax.plot(lap_num, lap_time, 's', markersize=10, 
+                        markerfacecolor='#fef08a', markeredgecolor='#ca8a04', 
+                        markeredgewidth=2, zorder=3)
+            elif lap_num == self.best_lap:
+                ax.plot(lap_num, lap_time, 'o', markersize=14, 
+                        markerfacecolor='#22c55e', markeredgecolor='white', 
+                        markeredgewidth=2, zorder=4)
+            else:
+                ax.plot(lap_num, lap_time, 'o', markersize=8, 
+                        markerfacecolor='#2563eb', markeredgecolor='white', 
+                        markeredgewidth=2, zorder=3)
 
-        # y axis limits with 2s padding
         min_time = min(lap_times)
         max_time = max(lap_times)
         ax.set_ylim(min_time - 2, max_time + 2)
         
-        # Format Y axis as mm:ss.ms
         def format_time(seconds, pos):
             minutes = int(seconds // 60)
             secs = int(seconds % 60)
@@ -2602,7 +2656,6 @@ class TelemetryWindow(QWidget):
         
         ax.yaxis.set_major_formatter(FuncFormatter(format_time))
         
-       
         ax.set_xlabel("Lap Number", fontsize=11, fontweight='bold', color='#111827')
         ax.set_ylabel("Lap Time", fontsize=11, fontweight='bold', color='#111827')
         ax.set_title("Lap Time Progression", fontsize=13, fontweight='bold', 
@@ -2612,21 +2665,17 @@ class TelemetryWindow(QWidget):
         ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
         ax.tick_params(colors='#111827', labelsize=10)
         
-       
         ax.set_xticks(lap_numbers)
         
-       
         for spine in ax.spines.values():
             spine.set_edgecolor('#d1d5db')
             spine.set_linewidth(1)
         
         fig.subplots_adjust(left=0.08, right=0.98, top=0.85, bottom=0.25)
         
-     
         canvas = FigureCanvas(fig)
         canvas.setFixedHeight(int(235 * self.scale_factor))
         
-        # hover tooltip with lap info
         def on_hover(event):
             if event.inaxes == ax:
                 for i, (lap_num, lap_time) in enumerate(zip(lap_numbers, lap_times)):
@@ -2638,7 +2687,6 @@ class TelemetryWindow(QWidget):
                         QToolTip.showText(canvas.mapToGlobal(event.guiEvent.pos()), tooltip_text)
                         return
                 QToolTip.hideText()
-        
         
         return canvas
     
@@ -6119,7 +6167,6 @@ class CSVLoader(QWidget):
         self.telemetry_window.rebuild_pages()
         
         self.session_type = session_type
-
 
 # ----------------------
 # Run the app
