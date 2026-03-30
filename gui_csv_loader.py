@@ -1829,12 +1829,10 @@ class TelemetryWindow(QWidget):
             print(f"is_inlap: {is_inlap}")
             print(f"Final is_valid: {is_valid}")
 
-            # Calculate sector times based on LapDistPct
             if len(lap_data_sorted) > 0:
                 lap_start_time = lap_data_sorted["SessionTime"].iloc[0]
                 lap_end_time = lap_data_sorted["SessionTime"].iloc[-1]
                 
-                # Find times at sector boundaries
                 sector1_rows = lap_data_sorted[lap_data_sorted["LapDistPct"] <= 33.33]
                 if len(sector1_rows) > 0:
                     sector1_end_time = sector1_rows["SessionTime"].iloc[-1]
@@ -1849,13 +1847,13 @@ class TelemetryWindow(QWidget):
                 
                 sector1_time = sector1_end_time - lap_start_time
                 sector2_time = sector2_end_time - sector1_end_time
-                sector3_time = lap_end_time - sector2_end_time
+                
+                sector3_time = lap_time - (sector1_time + sector2_time)
             else:
                 sector1_time = 0
                 sector2_time = 0
                 sector3_time = 0
 
-            # Format lap time
             minutes = int(lap_time // 60)
             seconds = int(lap_time % 60)
             millis = int((lap_time - int(lap_time)) * 1000)
@@ -1872,13 +1870,11 @@ class TelemetryWindow(QWidget):
                 'is_inlap': is_inlap
             }
 
-        # Remove the last lap (incomplete cooldown lap) BEFORE finding best lap
         if len(self.lap_timings) > 0:
             last_lap = max(self.lap_timings.keys())
             if last_lap in self.lap_timings:
                 del self.lap_timings[last_lap]
 
-        # Find best lap (OUTSIDE the loop) - exclude pit laps
         valid_lap_times = {lap: data['time'] for lap, data in self.lap_timings.items() 
                         if data['is_valid'] and data['time'] != float('inf') 
                         and not data['is_outlap'] and not data['is_inlap']}
@@ -1890,7 +1886,6 @@ class TelemetryWindow(QWidget):
             self.best_lap = None
             self.best_lap_time = None
 
-        # Calculate deltas to best lap (OUTSIDE the loop)
         if self.best_lap is not None:
             for lap in self.lap_timings:
                 delta = self.lap_timings[lap]['time'] - self.best_lap_time
