@@ -4757,7 +4757,6 @@ class TelemetryWindow(QWidget):
         lap_selector_wrapper_layout.setContentsMargins(2, 2, 2, 2)  
         lap_selector_wrapper_layout.addWidget(lap_selector_container)
 
-        # Add wrapper instead of container
         content_layout.addWidget(lap_selector_wrapper)
         content_layout.addWidget(self.lockup_map_container)
 
@@ -4786,8 +4785,8 @@ class TelemetryWindow(QWidget):
 
     def detect_all_lockups(self):
         #current definition of lockup for lockup detection
-        MIN_WHEEL_SPEED = 2  # m/s
-        MIN_GPS_SPEED = 10   # m/s
+        MIN_WHEEL_SPEED = 1  # m/s
+        MIN_GPS_SPEED = 5   # m/s
         GAP_THRESHOLD = 5    # ticks
         
         self.all_lockups = {'LF': [], 'RF': [], 'LR': [], 'RR': []}
@@ -4884,24 +4883,18 @@ class TelemetryWindow(QWidget):
             
             self.all_lockups[wheel_name] = grouped
     
-    # table to display lockup info such as lap of occurance, max temp recorded, tyre(s) locked, and duration(seconds) of lockp
     def create_lockup_table(self):
         all_events = []
         for wheel_name, lockups in self.all_lockups.items():
             for lockup in lockups:
                 all_events.append(lockup)
         
-        all_events.sort(key=lambda x: x['lap'])
-        
-        from collections import defaultdict
-        lap_groups = defaultdict(list)
-        for event in all_events:
-            lap_groups[event['lap']].append(event)
+        all_events.sort(key=lambda x: (x['lap'], x['idx']))  
         
         table = QTableWidget()
         table.setColumnCount(5)
-        table.setHorizontalHeaderLabels(['Lap', 'Tyres', 'Max Temp (°C)', 'Brake (%)', 'Length (s)'])
-        table.setRowCount(len(lap_groups))
+        table.setHorizontalHeaderLabels(['Lap', 'Tyre', 'Max Temp (°C)', 'Brake (%)', 'Length (s)'])
+        table.setRowCount(len(all_events)) 
         
         table.verticalHeader().setDefaultSectionSize(int(35 * self.scale_factor))
 
@@ -4918,18 +4911,18 @@ class TelemetryWindow(QWidget):
                 background-color: #f3f4f6;
                 color: #111827;
                 font-weight: bold;
-                font-size: {int(22 * self.scale_factor)}px;
+                font-size: 16px;
                 border: none;
                 border-right: 1px solid #9ca3af;
                 border-bottom: 2px solid #9ca3af;
                 border-left: 1px solid #9ca3af;           
-                padding: {int(15 * self.scale_factor)}px;
+                padding: 15px;
             }
             QHeaderView::section:first {
                 border-left: 1px solid #d1d5db;
             }
             QTableWidget::item {
-                padding: {int(19 * self.scale_factor)}px;
+                padding: 19px;
                 border-bottom: 1px solid #9ca3af;
                 border-right: 1px solid #9ca3af;
                 border-left: 1px solid #9ca3af;
@@ -4945,44 +4938,42 @@ class TelemetryWindow(QWidget):
             }
         """)
         
-        row = 0
-        for lap_num in sorted(lap_groups.keys()):
-            events = lap_groups[lap_num]
-            
-            #lap #
-            lap_item = QTableWidgetItem(str(lap_num))
+        # Populate table - BUGCHECK one entry PER lockup
+        for row, event in enumerate(all_events):
+            # Lap number
+            lap_item = QTableWidgetItem()
+            lap_item.setData(Qt.ItemDataRole.DisplayRole, int(event['lap']))
             lap_item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             table.setItem(row, 0, lap_item)
             
-            #tyre 
-            tyres = ', '.join(sorted(set(e['wheel'] for e in events)))
-            tyre_item = QTableWidgetItem(tyres)
+            # Single tyre
+            tyre_item = QTableWidgetItem(event['wheel'])
             tyre_item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             table.setItem(row, 1, tyre_item)
             
-            #max temp *C
-            max_temp = max(e['max_temp'] for e in events)
-            temp_item = QTableWidgetItem(f"{max_temp:.1f}")
+            # Max temp
+            temp_item = QTableWidgetItem()
+            temp_item.setData(Qt.ItemDataRole.DisplayRole, float(event['max_temp']))
             temp_item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             table.setItem(row, 2, temp_item)
             
-            # brake pressure (% raw input)
-            avg_brake = sum(e['brake'] for e in events) / len(events)
-            brake_item = QTableWidgetItem(f"{avg_brake:.1f}")
+            # Brake pressure 
+            brake_item = QTableWidgetItem()
+            brake_item.setData(Qt.ItemDataRole.DisplayRole, float(event['brake']))
             brake_item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             table.setItem(row, 3, brake_item)
             
-            # duration s
-            max_duration = max(e['duration'] for e in events)
-            duration_item = QTableWidgetItem(f"{max_duration:.3f}")
+            # Duration 
+            duration_item = QTableWidgetItem()
+            duration_item.setData(Qt.ItemDataRole.DisplayRole, float(event['duration']))
+            duration_item.setText(f"{event['duration']:.2f}") 
             duration_item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             table.setItem(row, 4, duration_item)
-            
-            row += 1
-        
 
-        table.setMaximumWidth(int(715 * self.scale_factor))
-        table.setMinimumWidth(int(715 * self.scale_factor)) 
+        table.setSortingEnabled(True)
+
+        table.setMaximumWidth(int(850 * self.scale_factor))
+        table.setMinimumWidth(int(850 * self.scale_factor)) 
         table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
         table_container = QWidget()
@@ -5000,59 +4991,43 @@ class TelemetryWindow(QWidget):
         table.horizontalHeader().setStretchLastSection(True)
         table.setColumnWidth(0, int(80 * self.scale_factor))
         table.setColumnWidth(1, int(150 * self.scale_factor))
-        table.setColumnWidth(2, int(160 * self.scale_factor))
-        table.setColumnWidth(3, int(110 * self.scale_factor))
+        table.setColumnWidth(2, int(200 * self.scale_factor))
+        table.setColumnWidth(3, int(180 * self.scale_factor))
         table.setColumnWidth(4, int(120 * self.scale_factor))
         
         table.setSortingEnabled(True)
-
-
-        for row_idx in range(table.rowCount()):
-            lap_item = table.item(row_idx, 0)
-            lap_item.setData(Qt.UserRole, int(lap_item.text()))
-            temp_item = table.item(row_idx, 2)
-            temp_item.setData(Qt.UserRole, float(temp_item.text()))
-            
-            brake_item = table.item(row_idx, 3)
-            brake_item.setData(Qt.UserRole, float(brake_item.text()))
-
-            duration_item = table.item(row_idx, 4)
-            duration_item.setData(Qt.UserRole, float(duration_item.text()))
-
         table.verticalHeader().setVisible(False)
-
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
 
-        self.lockup_lap_groups = lap_groups
-
+        self.lockup_all_events = all_events
+        
         table.itemSelectionChanged.connect(lambda: self.highlight_selected_lockup(table))
 
         self.lockup_table_widget = table 
 
         return table_container
-    
+
 
     def highlight_selected_lockup(self, table):
-
         selected_rows = table.selectionModel().selectedRows()
         
         if not selected_rows or not hasattr(self, 'lockup_scatter'):
             return
         
-        # Get selected lap
+        # Get selected lockup event
         selected_row = selected_rows[0].row()
-        sorted_laps = sorted(self.lockup_lap_groups.keys())
-        selected_lap = sorted_laps[selected_row]
-        
-        # Separate lockups into highlighted and non-highlighted
+        selected_event = self.lockup_all_events[selected_row]
+
         highlight_lons = []
         highlight_lats = []
         normal_lons = []
         normal_lats = []
         
         for lockup in self.lockup_metadata:
-            if lockup['lap'] == selected_lap:
+            if (lockup['lap'] == selected_event['lap'] and 
+                abs(lockup['lon'] - selected_event['lon']) < 0.000001 and 
+                abs(lockup['lat'] - selected_event['lat']) < 0.000001):
                 highlight_lons.append(lockup['lon'])
                 highlight_lats.append(lockup['lat'])
             else:
@@ -5062,7 +5037,6 @@ class TelemetryWindow(QWidget):
         self.lockup_scatter.remove()
         if hasattr(self, 'lockup_scatter_normal'):
             self.lockup_scatter_normal.remove()
-        
         
         if normal_lons:
             self.lockup_scatter_normal = self.lockup_map_ax.scatter(normal_lons, normal_lats,
@@ -5076,13 +5050,23 @@ class TelemetryWindow(QWidget):
         if highlight_lons:
             self.lockup_scatter = self.lockup_map_ax.scatter(highlight_lons, highlight_lats,
                                                             color='#3b82f6',
-                                                            s=150,
+                                                            s=250,  
                                                             alpha=0.9,
                                                             zorder=10,
                                                             picker=True,
-                                                            pickradius=15)
+                                                            pickradius=15,
+                                                            edgecolors='white',
+                                                            linewidths=3)
         
         self.lockup_map_canvas.draw_idle()
+
+
+    def select_table_row_by_lap(self, lap_num):
+        """This is called when clicking a dot - now finds the specific lockup"""
+        if not hasattr(self, 'lockup_table_widget') or not hasattr(self, 'lockup_all_events'):
+            return
+
+        pass  
         
     def populate_lockup_lap_selector(self):
     
@@ -5270,16 +5254,16 @@ class TelemetryWindow(QWidget):
                 if (event.artist != self.parent_window.lockup_scatter and 
                     event.artist != getattr(self.parent_window, 'lockup_scatter_normal', None)):
                     return
- 
+
                 ind = event.ind[0]
                 clicked_point = event.artist.get_offsets()[ind]
                 clicked_lon = clicked_point[0]
                 clicked_lat = clicked_point[1]
                 
-                for lockup in self.parent_window.lockup_metadata:
+                # Find the matching lockup in all_events and select that row
+                for row_idx, lockup in enumerate(self.parent_window.lockup_all_events):
                     if abs(lockup['lon'] - clicked_lon) < 0.000001 and abs(lockup['lat'] - clicked_lat) < 0.000001:
-                        clicked_lap = lockup['lap']
-                        self.parent_window.select_table_row_by_lap(clicked_lap)
+                        self.parent_window.lockup_table_widget.selectRow(row_idx)
                         break
 
         self.lockup_map_canvas = ClickableLockupCanvas(fig, self)
