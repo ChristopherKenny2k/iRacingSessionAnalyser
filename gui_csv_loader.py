@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QStyledItemDelegate,
+    QProgressDialog,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QSize
@@ -1754,7 +1755,6 @@ class TelemetryWindow(QWidget):
 
         return page
     
-    #TODO sectors not adding up properly
     def calculate_lap_timings(self):
         self.lap_timings = {}
         
@@ -2008,7 +2008,6 @@ class TelemetryWindow(QWidget):
         
         container_layout.addLayout(unit_toggle_layout)
 
-        # Colourbar figure TODO: ENSURE WIDE ENOUGH FIG's ARE VISIBLE (esp 3digit)
         colourbar_widget = QWidget()
         colourbar_widget.setFixedWidth(int(300 * self.scale_factor))
         colourbar_widget.setFixedHeight(int(390 * self.scale_factor))
@@ -4781,7 +4780,7 @@ class TelemetryWindow(QWidget):
     def detect_all_lockups(self):
         #current definition of lockup for lockup detection
         MIN_WHEEL_SPEED = 1  # m/s
-        MIN_GPS_SPEED = 5   # m/s
+        MIN_GPS_SPEED = 10   # m/s
         GAP_THRESHOLD = 5    # ticks
         
         self.all_lockups = {'LF': [], 'RF': [], 'LR': [], 'RR': []}
@@ -6082,51 +6081,90 @@ class CSVLoader(QWidget):
             self.continue_button.setVisible(False)
 
     def on_continue(self):
-        # show popup first - "wait" message TODO: loading bar
-        msg = QMessageBox()
-        msg.setWindowTitle("Please Wait")
-        msg.setText("Reading Data: This may take a few seconds")
-        msg.setIcon(QMessageBox.Information)
-        msg.setStandardButtons(QMessageBox.NoButton)
-        msg.show()
         session_type = (
             "Practice" if self.practice_cb.isChecked() else
             "Qualifying" if self.qualifying_cb.isChecked() else
             "Race"
         )
-        # force update to ensure popup appears
+        
+        # loading bar
+        progress = QProgressDialog("Please Wait \nLoading telemetry data...", None, 0, 100, self)
+        progress.setWindowTitle("Loading")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setMinimumSize(350, 200) 
+        progress.resize(350, 200)
+
+        progress.setStyleSheet("""
+            QProgressDialog {
+                font-size: 14px;
+            }
+            QProgressBar {
+                border: 2px solid #d1d5db;
+                border-radius: 5px;
+                text-align: center;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QProgressBar::chunk {
+                background-color: #22c55e;
+                border-radius: 3px;
+            }
+        """)
+
+        progress.setValue(0)
         QApplication.processEvents()
         
-        # Clean CSV
-        session_info, telemetry_df = clean_csv(self.csv_path)
+        # csv cleaning
+        progress.setLabelText("Please Wait \nReading CSV file...")
+        progress.setValue(10)
+        QApplication.processEvents()
         
-        # Remove duplicates based on SessionTick (preserves temporal data during spins)
+        session_info, telemetry_df = clean_csv(self.csv_path)
+        progress.setValue(40)
+        QApplication.processEvents()
+        
+        # removing dupes
+        progress.setLabelText("Please Wait \nRemoving duplicates...")
+        QApplication.processEvents()
+        
         telemetry_df = telemetry_df.drop_duplicates(
             subset=["SessionTick"],
             keep="first"
         ).reset_index(drop=True)
-
-        # Sort by SessionTick for temporal order (DO NOT sort by LapTimeline)
+        progress.setValue(60)
+        QApplication.processEvents()
+        
+        # sorting
+        progress.setLabelText("Please Wait \nSorting telemetry data...")
+        QApplication.processEvents()
+        
         telemetry_df = telemetry_df.sort_values("SessionTick").reset_index(drop=True)
-
-        # Create LapTimeline for compatibility (but don't sort by it)
+        progress.setValue(80)
+        QApplication.processEvents()
+        
+        # laptimeline creation
+        progress.setLabelText("Please Wait \nCreating lap timeline...")
+        QApplication.processEvents()
+        
         telemetry_df["LapTimeline"] = (
             telemetry_df["Lap"].astype(float) +
             telemetry_df["LapDistPct"].astype(float) / 100.0
         )
-
-        # close popup
-        msg.close()
-
-        self.close()  
+        progress.setValue(90)
+        QApplication.processEvents()
         
-        # Create window
+        # initiralising window
+        progress.setLabelText("Please Wait \nInitialising interface...")
+        QApplication.processEvents()
+        
+        self.close()
+        
         self.telemetry_window = TelemetryWindow(session_info, telemetry_df, session_type)
         self.telemetry_window.setWindowFlags(Qt.Window)
-        
         self.telemetry_window.showMaximized()
         
-        # NOW detect the screen and update scale factor
+        # Detect screen and update scale factor
         screen = self.telemetry_window.screen()
         if screen is None:
             screen = QApplication.primaryScreen()
@@ -6134,9 +6172,9 @@ class CSVLoader(QWidget):
         screen_width = screen.geometry().width()
         
         if screen_width <= 1920:
-            self.telemetry_window.scale_factor = 0.7  
+            self.telemetry_window.scale_factor = 0.7
         elif screen_width <= 2560:
-            self.telemetry_window.scale_factor = 0.85  
+            self.telemetry_window.scale_factor = 0.85
         else:
             self.telemetry_window.scale_factor = 1.0
         
@@ -6144,6 +6182,9 @@ class CSVLoader(QWidget):
         
         # Rebuild pages with correct scale
         self.telemetry_window.rebuild_pages()
+        
+        progress.setValue(100)
+        progress.close()
         
         self.session_type = session_type
 
@@ -6173,8 +6214,6 @@ if __name__ == "__main__":
     window.show()
     sys.exit(app.exec())"""
 
-#TODO: Test scrollability of all tables, meaning, record a lot of laps, perform a lot of lockups
-#TODO: Implement pitstop detection (inlap | outlap) colour them accordingly in table
 #TODO: imp incident page
 #TODO: imp lap v lap comaprison
 
