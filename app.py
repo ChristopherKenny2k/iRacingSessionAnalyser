@@ -52,7 +52,15 @@ from scipy.ndimage import median_filter
 
 from csv_cleaner import clean_csv
 
+import os
 
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.dirname(__file__)  # Changed from os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class ZoomableCanvas(FigureCanvas):
     def __init__(self, fig):
@@ -192,7 +200,7 @@ class TelemetryWindow(QWidget):
         header_layout.setSpacing(8)
 
         logo_label = QLabel()
-        logo_pixmap = QPixmap("icons/c2k.png")
+        logo_pixmap = QPixmap(resource_path("icons/c2k.png"))
         logo_pixmap = logo_pixmap.scaled(
             125, 125,
             Qt.KeepAspectRatio,
@@ -260,13 +268,13 @@ class TelemetryWindow(QWidget):
 
         # -=NAVIGATION ITEMS WITH SHELF STRUCTURE=-
         nav_items = [
-            ("Session Overview", "icons/icon_Overview.png", 0),
-            ("Timing Data", "icons/icon_Timings.png", 1),
-            ("Pedal Usage Data", "icons/icon_Pedals.png", 2),
-            ("Lock-up Data", "icons/icon_Brakes.png", 3), 
-            ("Tyre Data", "icons/icon_Tyre.png", 4),
-            ("Fuel Usage Data", "icons/icon_Fuel.png", 5),
-            ("Data Previewer", "icons/icon_Data.png", 6),
+            ("Session Overview", resource_path("icons/icon_Overview.png"), 0),
+            ("Timing Data", resource_path("icons/icon_Timings.png"), 1),
+            ("Pedal Usage Data", resource_path("icons/icon_Pedals.png"), 2),
+            ("Lock-up Data", resource_path("icons/icon_Brakes.png"), 3), 
+            ("Tyre Data", resource_path("icons/icon_Tyre.png"), 4),
+            ("Fuel Usage Data", resource_path("icons/icon_Fuel.png"), 5),
+            ("Data Previewer", resource_path("icons/icon_Data.png"), 6),
         ]
  
         for label, icon_path, page_index in nav_items:
@@ -588,7 +596,7 @@ class TelemetryWindow(QWidget):
         weather_content_layout.setSpacing(10)
 
         weather_icon = QLabel()
-        weather_pixmap = QPixmap(f"icons/{weather_icon_name}.png")
+        weather_pixmap = QPixmap(resource_path(f"icons/{weather_icon_name}.png"))
         if not weather_pixmap.isNull():
             weather_icon.setPixmap(weather_pixmap.scaled(55, 55, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         weather_icon.setFixedSize(60, 60)
@@ -6165,7 +6173,7 @@ class CSVLoader(QWidget):
 # ----------------------
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon("icons/c2k.png"))
+    app.setWindowIcon(QIcon(resource_path("icons/c2k.png")))
     window = CSVLoader()
     window.show()
     sys.exit(app.exec())
@@ -6173,7 +6181,7 @@ if __name__ == "__main__":
 #TEMP TO TEST SIZES ON SMALLER MONITOR TODO: REMOVE UPON FINAL SHIP
 """if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon("icons/c2k.png"))
+    app.setWindowIcon(QIcon(resource_path("icons/c2k.png")))
     window = CSVLoader()
     
     # Force to smallest screen (your 1080p monitor)
