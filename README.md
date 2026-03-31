@@ -57,7 +57,7 @@ python app.py
 
 ## 📝 License
 
-This project is open source if  anything used in any future commercial or open source project, ackowledgements would be appreciated but are not neccessary.
+This project is open source if  anything used in any future commercial or open source project, acknowledgements would be appreciated but are not neccessary.
 
 ## 🏁 Acknowledgments
 
