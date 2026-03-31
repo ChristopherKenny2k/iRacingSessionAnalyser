@@ -7,7 +7,7 @@ Comprehensive telemetry analysis tool for iRacing sessions. Load your CSV teleme
 
 ## ✨ Features
 
-- **Session Overview** - Track position analysis with detailed statistics for Practice, Qualifying, and Race sessions
+- **Session Overview** - Environmental data and race-specific data, qualifying-specific data, or practice session-specific data
 - **Lap Timing Analysis** - Sector-by-sector breakdown with track map visualization and delta comparisons
 - **Pedal Telemetry** - Throttle and brake usage visualization with real-time playback
 - **Fuel Management** - Usage tracking, correlation analysis, and consumption patterns
