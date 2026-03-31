@@ -346,7 +346,6 @@ class TelemetryWindow(QWidget):
             else:
                 self.scale_factor = 1.0
                 
-            print(f"Screen detected: {screen_width}px, Scale factor: {self.scale_factor}")
             self._scale_factor_set = True
                 
             # Trigger rebuild of pages with correct scale factor
@@ -434,15 +433,8 @@ class TelemetryWindow(QWidget):
             lons = [p['lon'] for p in track_points]
             ax.plot(lons, lats, color='black', linewidth=2, zorder=1)
         
-        # Debug: print track coordinates to verify
-        print(f"Track points: {len(track_points)}")
-        if len(track_points) > 0:
-            print(f"Lat range: {min(lats)} to {max(lats)}")
-            print(f"Lon range: {min(lons)} to {max(lons)}")
-        
         # Plot overtake markers
         if hasattr(self, 'race_overtakes'):
-            print(f"Total overtakes: {len(self.race_overtakes)}")
             for overtake in self.race_overtakes:
                 if overtake['is_gain'] and self.show_overtakes:
                     # Green dot for overtake
@@ -1206,15 +1198,11 @@ class TelemetryWindow(QWidget):
         
         lap_data = self.telemetry_df[self.telemetry_df["Lap"] == target_lap].sort_values("LapDistPct")
         
-        print(f"Using lap {target_lap} for track outline")
-        print(f"Lap data points: {len(lap_data)}")
 
         if len(lap_data) > 0:
             lat = lap_data["Lat"].values
             lon = lap_data["Lon"].values
             
-            print(f"Lat range: {lat.min()} to {lat.max()}")
-            print(f"Lon range: {lon.min()} to {lon.max()}")
             
             ax.plot(lon, lat, color='black', linewidth=4, zorder=1)
             
@@ -1241,11 +1229,8 @@ class TelemetryWindow(QWidget):
                     ax.plot([start_lon - perp_dx, start_lon + perp_dx],
                         [start_lat - perp_dy, start_lat + perp_dy],
                         color='red', linewidth=3, zorder=4)
-        else:
-            print("ERROR: No lap data found for track outline!")
-
+         
         if hasattr(self, 'race_overtakes'):
-            print(f"Total overtakes: {len(self.race_overtakes)}")
             for i, overtake in enumerate(self.race_overtakes):
                 
                 if overtake['is_gain'] and self.show_overtakes:
@@ -1519,7 +1504,6 @@ class TelemetryWindow(QWidget):
         """Handle lap selection from overview page"""
         lap_text = item.text()
         lap_num = int(lap_text.split(":")[0].replace("Lap ", ""))
-        print(f"Selected lap {lap_num} from overview")
    
 #----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1770,18 +1754,9 @@ class TelemetryWindow(QWidget):
 
             # Check for pit laps
             lap_data_sorted = lap_data.sort_values("SessionTime")
-            # Add debug logging
-            print(f"\n=== Lap {lap} Pit Road Check ===")
-            print(f"OnPitRoad at start: {lap_data_sorted['OnPitRoad'].iloc[0]}")
-            print(f"OnPitRoad at end: {lap_data_sorted['OnPitRoad'].iloc[-1]}")
-            print(f"OnPitRoad unique values: {lap_data_sorted['OnPitRoad'].unique()}")
-            print(f"OnPitRoad value counts:\n{lap_data_sorted['OnPitRoad'].value_counts()}")
+            is_outlap = lap_data_sorted["OnPitRoad"].iloc[0] == 1  
+            is_inlap = lap_data_sorted["OnPitRoad"].iloc[-1] == 1 
 
-            is_outlap = lap_data_sorted["OnPitRoad"].iloc[0] == 1  # Starts on pit road
-            is_inlap = lap_data_sorted["OnPitRoad"].iloc[-1] == 1  # Ends on pit road
-
-            print(f"is_outlap: {is_outlap}")
-            print(f"is_inlap: {is_inlap}")
 
             # iRacing does not report lap time of last lap in session due to cooldown lap not being fully completed, 
             # therefore i use session ticks (60 per second) to calculate the time (usually off by +- .006s)
@@ -1821,13 +1796,6 @@ class TelemetryWindow(QWidget):
                     has_speed_anomaly = True
 
             is_valid = is_on_track and is_monotonic and not has_speed_anomaly
-        
-            print(f"\n=== Lap {lap} Validity Check ===")
-            print(f"is_on_track: {is_on_track}")
-            print(f"is_monotonic: {is_monotonic}")
-            print(f"is_outlap: {is_outlap}")
-            print(f"is_inlap: {is_inlap}")
-            print(f"Final is_valid: {is_valid}")
 
             if len(lap_data_sorted) > 0:
                 lap_start_time = lap_data_sorted["SessionTime"].iloc[0]
@@ -4089,17 +4057,9 @@ class TelemetryWindow(QWidget):
 
         lap_data = lap_data.sort_values("SessionTick").reset_index(drop=True)
 
-        print(f"\n=== Lap {selected_lap} Data Analysis ===")
-        print(f"Total rows: {len(lap_data)}")
-        print(f"SessionTick range: {lap_data['SessionTick'].min()} to {lap_data['SessionTick'].max()}")
         tick_diff = lap_data["SessionTick"].diff()
         large_gaps = tick_diff[tick_diff > 10]
-        if len(large_gaps) > 0:
-            print(f"Found {len(large_gaps)} large gaps in SessionTick:")
-            for idx, gap in large_gaps.items():
-                print(f"  Row {idx}: gap of {gap} ticks")
-        print(f"IsOnTrackCar values: {lap_data['IsOnTrackCar'].value_counts().to_dict()}")
-
+   
         self.current_lap_data = lap_data
         self.playback_index = 0
 
@@ -5212,15 +5172,7 @@ class TelemetryWindow(QWidget):
                 all_lats.extend([l['lat'] for l in wheel_lockups])
                 self.lockup_metadata.extend(wheel_lockups)  
         
-        if all_lons:
-            print(f"\n=== PLOTTING {len(all_lons)} LOCKUPS ===")
-            for i in range(min(5, len(all_lons))): 
-                print(f"Plot point {i}: lon={all_lons[i]:.6f}, lat={all_lats[i]:.6f}")
-            
-            print(f"\n=== METADATA {len(self.lockup_metadata)} LOCKUPS ===")
-            for i in range(min(5, len(self.lockup_metadata))):  
-                print(f"Metadata {i}: lon={self.lockup_metadata[i]['lon']:.6f}, lat={self.lockup_metadata[i]['lat']:.6f}")
-            
+        
             self.lockup_scatter = ax.scatter(all_lons, all_lats, 
                     color='#ef4444', 
                     s=150,
@@ -6092,10 +6044,8 @@ class CSVLoader(QWidget):
             self.csv_path = file_path
             self.label.setText(f"Loaded CSV:\n{file_path}")
             self.checkbox_group.setVisible(True)
-            print(f"CSV loaded: {file_path}")
         except Exception as e:
             self.label.setText(f"Error loading CSV:\n{e}")
-            print(f"Error loading CSV: {e}")
 
     def show_continue(self):
         if self.practice_cb.isChecked() or self.qualifying_cb.isChecked() or self.race_cb.isChecked():
@@ -6201,8 +6151,7 @@ class CSVLoader(QWidget):
         else:
             self.telemetry_window.scale_factor = 1.0
         
-        print(f"✓ Window shown on screen: {screen_width}px, Scale factor: {self.telemetry_window.scale_factor}")
-        
+         
         # Rebuild pages with correct scale
         self.telemetry_window.rebuild_pages()
         
