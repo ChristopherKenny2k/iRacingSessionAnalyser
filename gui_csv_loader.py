@@ -3129,6 +3129,11 @@ class TelemetryWindow(QWidget):
         avg_temps = []
         
         for lap in sorted(self.lap_timings.keys()):
+            # SKIP PIT LAPS
+            lap_timing_data = self.lap_timings[lap]
+            if lap_timing_data.get('is_outlap', False) or lap_timing_data.get('is_inlap', False):
+                continue
+            
             lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap].copy()
             if len(lap_data) == 0:
                 continue
@@ -3140,7 +3145,7 @@ class TelemetryWindow(QWidget):
                 lap_data['RRtempL'].mean() + lap_data['RRtempM'].mean() + lap_data['RRtempR'].mean()
             ) / 12
             
-            lap_time = self.lap_timings[lap]['time']
+            lap_time = lap_timing_data['time']
             
             if lap_time != float('inf'):
                 lap_numbers.append(lap)
@@ -5728,8 +5733,15 @@ class TelemetryWindow(QWidget):
             idx = laps.index(self.selected_fuel_lap)
             bars[idx].set_color('#2563eb')
 
-        y_margin = (max_usage - min_usage) * 0.1
-        ax.set_ylim(min_usage - y_margin, max_usage + y_margin)
+        y_range = max_usage - min_usage
+        y_margin = y_range * 0.1 if y_range > 0 else 0.1
+
+        if min_usage - y_margin > 0:
+            y_min = min_usage - y_margin
+        else:
+            y_min = 0
+
+        ax.set_ylim(y_min, max_usage + y_margin)
         
         ax.set_xlabel('Lap Number', fontsize=11, fontweight='bold', color='#111827')
         ax.set_ylabel('Fuel Used (L)', fontsize=11, fontweight='bold', color='#111827')
@@ -5830,12 +5842,17 @@ class TelemetryWindow(QWidget):
         fuel_loads = []
         
         for lap in sorted(self.lap_timings.keys()):
+            # SKIP PIT LAPS
+            lap_timing_data = self.lap_timings[lap]
+            if lap_timing_data.get('is_outlap', False) or lap_timing_data.get('is_inlap', False):
+                continue
+            
             lap_data = self.telemetry_df[self.telemetry_df["Lap"] == lap]
             if len(lap_data) == 0:
                 continue
             
             avg_fuel = lap_data['FuelLevel'].mean()
-            lap_time = self.lap_timings[lap]['time']
+            lap_time = lap_timing_data['time']
             
             if lap_time != float('inf'):
                 lap_numbers.append(lap)
@@ -5848,12 +5865,18 @@ class TelemetryWindow(QWidget):
         fig = Figure(figsize=(10, 5), facecolor='#f8f9fa')
         ax = fig.add_subplot(111)
         
-        scatter = ax.scatter(fuel_loads, lap_times, s=100, c=lap_numbers, 
-                            cmap='viridis', edgecolors='black', linewidths=1.5, zorder=3)
+        from matplotlib.colors import ListedColormap
+        pastel_colors = ['#FFB3BA', '#FFDFBA', '#FFFFBA', '#BAFFC9', '#BAE1FF', 
+                        '#E0BBE4', '#FFDFD3', '#C9E4DE', '#FEC8D8', '#D4F0F0']
+        pastel_cmap = ListedColormap(pastel_colors)
+
+        scatter = ax.scatter(fuel_loads, lap_times, s=150, c=lap_numbers, 
+                            cmap=pastel_cmap, edgecolors='black', linewidths=2, zorder=3)
 
         for lap_num, fuel, time in zip(lap_numbers, fuel_loads, lap_times):
             ax.annotate(f'{lap_num}', (fuel, time), 
-                    fontsize=9, fontweight='bold', ha='center', va='center')
+                    fontsize=10, fontweight='bold', ha='center', va='center',
+                    color='black') 
         
         if len(fuel_loads) > 1:
             z = np.polyfit(fuel_loads, lap_times, 1)
