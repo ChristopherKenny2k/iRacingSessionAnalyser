@@ -1,7 +1,7 @@
 # 📖 User Guide - iRacing Telemetry Analyser
 
-# * This application requires a .ibt to .csv converter * #
-# * I recommend Mu Downloadable Here ---> **[Mu] (https://github.com/patrickmoore/Mu)**
+## * *This application requires a .ibt to .csv converter* * #
+## * *I recommend Mu Downloadable Here ---> **[Mu](https://github.com/patrickmoore/Mu)**
 
 ## Once installed watch the following video tutorial on converting .ibt to .csv and loading into iRacing Telemetry Analyser
 ## 📹 Video Tutorial
