@@ -20,8 +20,8 @@
 1. Locate your desired session telemetry (\Documents\iRacing\telemetry)
 2. Place file in separate folder (Not neccessary but useful if telemetry file has a lot of recorded sessions)
 3. Use Mu to convert .ibt to .csv  
-    ↳ Mu Settings (Crucial)  
-       ↳ - Exporter = Csv  
+    ↳ <ins>Mu Settings (Crucial) </ins> 
+         - Exporter = Csv  
          - Units = Metric  
          - Import Directory = file location mentioned in .2 (if none made, then Documents\iRacing\Telemetry)
          - Export Directory = desired location   
