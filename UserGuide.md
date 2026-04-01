@@ -23,7 +23,7 @@
     ↳ <ins>Mu Settings (Crucial) </ins>   
          - Exporter = Csv  
          - Units = Metric  
-         - Import Directory = file location mentioned in .2 (if none made, then Documents\iRacing\Telemetry)
+         - Import Directory = file location mentioned above (in Step 2.2) (if none made, then Documents\iRacing\Telemetry)
          - Export Directory = desired location   
          - Export Lap Threshol = 0  
          - Remove iRacing Telemetry = Never  
