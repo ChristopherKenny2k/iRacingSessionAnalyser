@@ -25,7 +25,7 @@
          - Units = Metric  
          - Import Directory = file location mentioned above (in Step 2.2) (if file has not been moved, then Documents\iRacing\Telemetry)  
          - Export Directory = desired location   
-         - Export Lap Threshol = 0  
+         - Export Lap Threshold = 0  
          - Remove iRacing Telemetry = Never  
          - Show Settings on Startup = On  
          - Save Current Setup = Off  
