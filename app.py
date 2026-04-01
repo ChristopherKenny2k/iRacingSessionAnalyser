@@ -162,7 +162,7 @@ class TelemetryWindow(QWidget):
         self.session_info = session_info
         self.telemetry_df = telemetry_df
         self.session_type = session_type
-        self.setWindowIcon(QIcon("icons/c2k.png"))
+        self.setWindowIcon(QIcon(resource_path("icons/c2k.png")))
 
         palette = QPalette()
         palette.setColor(QPalette.ToolTipBase, QColor("white"))
@@ -200,7 +200,7 @@ class TelemetryWindow(QWidget):
         header_layout.setSpacing(8)
 
         logo_label = QLabel()
-        logo_pixmap = QPixmap(resource_path("icons/c2k.png"))
+        logo_pixmap = QPixmap(QIcon(resource_path("icons/c2k.png")))
         logo_pixmap = logo_pixmap.scaled(
             125, 125,
             Qt.KeepAspectRatio,
