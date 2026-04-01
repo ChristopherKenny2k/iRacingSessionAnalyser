@@ -12,7 +12,7 @@
 ## 🚀 Quick Start
 
 ### Step 1: Download the Application
-1. Go to the [Releases page]**(https://github.com/ChristopherKenny2k/iRacingSessionAnalyser/releases)**
+1. Go to the **[Releases page](https://github.com/ChristopherKenny2k/iRacingSessionAnalyser/releases)**
 2. Download `iRacing-Telemetry-Analyser.exe`
 3. Save it to your preferred location
 
@@ -20,7 +20,7 @@
 1. Locate your desired session telemetry (\Documents\iRacing\telemetry)
 2. Place file in separate folder (Not neccessary but useful if telemetry file has a lot of recorded sessions)
 3. Use Mu to convert .ibt to .csv  
-    ↳ <ins>Mu Settings (Crucial) </ins> 
+    ↳ <ins>Mu Settings (Crucial) </ins>   
          - Exporter = Csv  
          - Units = Metric  
          - Import Directory = file location mentioned in .2 (if none made, then Documents\iRacing\Telemetry)
