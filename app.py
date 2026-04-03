@@ -162,6 +162,7 @@ class TelemetryWindow(QWidget):
         self.session_info = session_info
         self.telemetry_df = telemetry_df
         self.session_type = session_type
+        self.calculate_lap_timings()
         self.setWindowIcon(QIcon(resource_path("icons/c2k.png")))
 
         palette = QPalette()
@@ -200,7 +201,7 @@ class TelemetryWindow(QWidget):
         header_layout.setSpacing(8)
 
         logo_label = QLabel()
-        logo_pixmap = QPixmap(QIcon(resource_path("icons/c2k.png")))
+        logo_pixmap = QPixmap(resource_path("icons/c2k.png"))
         logo_pixmap = logo_pixmap.scaled(
             125, 125,
             Qt.KeepAspectRatio,
@@ -755,6 +756,14 @@ class TelemetryWindow(QWidget):
             else:
                 self.calculate_lap_timings()
                 valid_laps = {lap: data for lap, data in self.lap_timings.items() if data['is_valid']}
+
+                # With:
+                valid_laps = {
+                    lap: data for lap, data in self.lap_timings.items() 
+                    if data['is_valid'] 
+                    and not data.get('is_outlap', False) 
+                    and not data.get('is_inlap', False)
+                }
                 if valid_laps:
                     best_lap_num = min(valid_laps, key=lambda x: valid_laps[x]['time'])
                     best_lap_data = valid_laps[best_lap_num]
@@ -792,7 +801,7 @@ class TelemetryWindow(QWidget):
             
             best_lap_layout.addStretch()
             
-            track_map = self.make_track_map_widget(venue, self.scale_factor)
+            track_map = self.make_track_map_widget(venue, self.scale_factor, lap_number=best_lap_num)
             track_map.setFixedSize(int(729 * self.scale_factor), int(671 * self.scale_factor))
             track_map.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             
@@ -820,6 +829,19 @@ class TelemetryWindow(QWidget):
             fastest_lap_formatted = f"{minutes:02}:{seconds:02}.{millis:03}"
             fastest_lap_on = int(df_valid.loc[df_valid["LapLastLapTime"].idxmin()]["Lap"])
 
+            # With:
+            # Find fastest valid lap excluding pit laps
+            valid_non_pit_laps = {
+                lap: data for lap, data in self.lap_timings.items() 
+                if data['is_valid'] 
+                and not data.get('is_outlap', False) 
+                and not data.get('is_inlap', False)
+            }
+            if valid_non_pit_laps:
+                fastest_lap_on = min(valid_non_pit_laps, key=lambda x: valid_non_pit_laps[x]['time'])
+            else:
+                fastest_lap_on = int(df_valid.loc[df_valid["LapLastLapTime"].idxmin()]["Lap"])
+                
             overview_df = pd.DataFrame({
                 "Metric": ["Laps Completed", "Fastest Lap", "Fastest Lap Set On"],
                 "Value": [laps_completed, fastest_lap_formatted, fastest_lap_on]
@@ -871,7 +893,7 @@ class TelemetryWindow(QWidget):
                 }
             """)
 
-            track_map = self.make_track_map_widget(venue, self.scale_factor)
+            track_map = self.make_track_map_widget(venue, self.scale_factor, lap_number=fastest_lap_on)
             track_map.setFixedSize(int(900 * self.scale_factor), int(750 * self.scale_factor)) 
             table.setContentsMargins(0, 0, 0, 0)
             table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -1181,7 +1203,6 @@ class TelemetryWindow(QWidget):
         return page
 
     def make_race_track_map_widget(self, venue, scale_factor=1.0):
-        """Create track map with overtake markers for race overview"""
         from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
         from matplotlib.figure import Figure
         
@@ -1377,8 +1398,8 @@ class TelemetryWindow(QWidget):
         
         return canvas
     
-    def make_track_map_widget(self, venue, scale_factor=1.0):
-        """Create simple track map for Practice/Qualifying (no scale factor needed for these)"""
+    def make_track_map_widget(self, venue, scale_factor, lap_number=None):
+        """Create simple track map for Practice/Qualifying"""
         from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
         from matplotlib.figure import Figure
         
@@ -1389,19 +1410,22 @@ class TelemetryWindow(QWidget):
 
         canvas.setMinimumSize(int(705 * scale_factor), int(588 * scale_factor))
         canvas.setMaximumSize(int(999 * scale_factor), int(882 * scale_factor))
-    
+
         ax = fig.add_subplot(111)
         
-        # Get a clean lap for track outline
-        available_laps = sorted(self.telemetry_df["Lap"].unique())
-        target_lap = None
-        for lap in [3, 4, 2, 5]:
-            if lap in available_laps:
-                target_lap = lap
-                break
-        
-        if target_lap is None and len(available_laps) > 0:
-            target_lap = available_laps[0]
+        # Use provided lap_number or find a clean lap
+        if lap_number is not None:
+            target_lap = lap_number
+        else:
+            available_laps = sorted(self.telemetry_df["Lap"].unique())
+            target_lap = None
+            for lap in [3, 4, 2, 5]:
+                if lap in available_laps:
+                    target_lap = lap
+                    break
+            
+            if target_lap is None and len(available_laps) > 0:
+                target_lap = available_laps[0]
         
         lap_data = self.telemetry_df[self.telemetry_df["Lap"] == target_lap].sort_values("SessionTime")
         
@@ -1434,7 +1458,7 @@ class TelemetryWindow(QWidget):
                         color='red', linewidth=3, zorder=4)
                     
         ax.set_title(venue.upper(), fontsize=18, fontweight='bold', color='#000000', pad=10)
-    
+
         ax.set_aspect('equal', adjustable='datalim')
         
         ax.set_xticks([])
