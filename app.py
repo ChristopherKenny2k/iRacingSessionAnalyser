@@ -150,9 +150,9 @@ class ColorDelegate(QStyledItemDelegate):
         # Call parent to paint the text
         super().paint(painter, option, index)
 
-# ----------------------
+# ---------------------
 # Full-screen window after CSV load
-# ----------------------
+# ---------------------
 class TelemetryWindow(QWidget):
     def __init__(self, session_info, telemetry_df, session_type):
         super().__init__()
