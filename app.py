@@ -4776,9 +4776,10 @@ class TelemetryWindow(QWidget):
 
     def detect_all_lockups(self):
         #current definition of lockup for lockup detection
-        MIN_WHEEL_SPEED = 1  # m/s
-        MIN_GPS_SPEED = 10   # m/s
+        MIN_WHEEL_SPEED = .5  # m/s
+        MIN_GPS_SPEED = 20   # m/s
         GAP_THRESHOLD = 5    # ticks
+        MIN_DURATION = 0.01 #length (seconds)
         
         self.all_lockups = {'LF': [], 'RF': [], 'LR': [], 'RR': []}
         
@@ -4855,10 +4856,11 @@ class TelemetryWindow(QWidget):
                     last_tick = self.telemetry_df.iloc[current_group[-1]['idx']]['SessionTick']
                     duration = (last_tick - first_tick) / 60 
                     
-                    mid_idx = len(current_group) // 2
-                    middle_event = current_group[mid_idx].copy()
-                    middle_event['duration'] = duration
-                    grouped.append(middle_event)
+                    if duration >= MIN_DURATION:
+                        mid_idx = len(current_group) // 2
+                        middle_event = current_group[mid_idx].copy()
+                        middle_event['duration'] = duration
+                        grouped.append(middle_event)
                     
                     current_group = [self.all_lockups[wheel_name][i]]
             
@@ -4867,10 +4869,11 @@ class TelemetryWindow(QWidget):
                 last_tick = self.telemetry_df.iloc[current_group[-1]['idx']]['SessionTick']
                 duration = (last_tick - first_tick) / 60
                 
-                mid_idx = len(current_group) // 2
-                middle_event = current_group[mid_idx].copy()
-                middle_event['duration'] = duration
-                grouped.append(middle_event)
+                if duration >= MIN_DURATION:
+                    mid_idx = len(current_group) // 2
+                    middle_event = current_group[mid_idx].copy()
+                    middle_event['duration'] = duration
+                    grouped.append(middle_event)
             
             self.all_lockups[wheel_name] = grouped
     
@@ -5155,7 +5158,6 @@ class TelemetryWindow(QWidget):
             self.lockup_stats_layout.addWidget(stats_widget)
 
     def create_lockup_track_map(self, selected_laps):
-
         first_lap = sorted(self.lap_timings.keys())[0]
         lap_data = self.telemetry_df[self.telemetry_df["Lap"] == first_lap].copy()
         
@@ -5204,16 +5206,14 @@ class TelemetryWindow(QWidget):
                 all_lats.extend([l['lat'] for l in wheel_lockups])
                 self.lockup_metadata.extend(wheel_lockups)  
         
-        
+        if all_lons: 
             self.lockup_scatter = ax.scatter(all_lons, all_lats, 
                     color='#ef4444', 
                     s=150,
                     alpha=0.6,
                     zorder=5,
-                    label='Lockups',
                     picker=True,
                     pickradius=15)
-            ax.legend(loc='upper right', fontsize=11, framealpha=0.9)
         else:
             self.lockup_metadata = []
         
@@ -5247,6 +5247,7 @@ class TelemetryWindow(QWidget):
                 for row_idx, lockup in enumerate(self.parent_window.lockup_all_events):
                     if abs(lockup['lon'] - clicked_lon) < 0.000001 and abs(lockup['lat'] - clicked_lat) < 0.000001:
                         self.parent_window.lockup_table_widget.selectRow(row_idx)
+                        self.parent_window.highlight_selected_lockup(self.parent_window.lockup_table_widget)
                         break
 
         self.lockup_map_canvas = ClickableLockupCanvas(fig, self)
@@ -6004,7 +6005,7 @@ class TelemetryWindow(QWidget):
 class CSVLoader(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("iRacing CSV Analyzer")
+        self.setWindowTitle("iRacing CSV Analyser")
         self.setGeometry(200, 200, 400, 350)
 
         self.layout = QVBoxLayout()
