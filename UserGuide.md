@@ -5,7 +5,7 @@
 
 ## Once installed watch the following video tutorial on converting .ibt to .csv and loading into iRacing Telemetry Analyser
 ## 📹 Video Tutorial
-**[▶️ Watch the Full Tutorial on YouTube]([https://www.youtube.com/watch?v=YOUR_VIDEO_ID](https://youtu.be/4drDeOGHRqY))**
+**[▶️ Watch the Full Tutorial on YouTube](https://youtu.be/4drDeOGHRqY)**
 
 ---
 
