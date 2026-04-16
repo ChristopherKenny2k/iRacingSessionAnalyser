@@ -48,7 +48,7 @@
 - Overall session statistics specific to session type (Race | Qualifying | Practice)
 - Weather conditions and track information
 
-<img width="866" height="798" alt="screenshot6" src="https://github.com/user-attachments/assets/10350119-4cf1-4957-9454-fb7df78dee65" />
+<img width="650" height="600" alt="screenshot6" src="https://github.com/user-attachments/assets/10350119-4cf1-4957-9454-fb7df78dee65" />
 
 
 ---
@@ -64,6 +64,8 @@
   - ⚪ **White** = Normal lap
   - Overview Statistics Bar with lap consistency and performance score
 
+<img width="1000" height="580" alt="screenshot1" src="https://github.com/user-attachments/assets/a75c533c-2469-4245-aece-36d03852741c" />
+
 ---
 
 ### 🦶 Pedal Usage Data
@@ -71,6 +73,9 @@
 - Throttle and brake input graphs per lap
 - Real-time playback of your pedal inputs
 - Coasting detection
+
+<img width="1000" height="580" alt="screenshot2" src="https://github.com/user-attachments/assets/9de00a2c-ae2c-478f-8a23-a624234e3cde" />
+
 
 **How to use:**
 1. Select a lap from the timeline
@@ -88,6 +93,8 @@
 - Track map with lockup locations marked
 - Per-wheel lockup analysis (LF, RF, LR, RR)
 - Lockup duration and maximum temperature
+
+<img width="1000" height="600" alt="screenshot3" src="https://github.com/user-attachments/assets/1de840c2-e8f8-4e7f-b15c-288507ae4279" />
 
 **How to use:**
 1. View the track map to see WHERE you're locking up
@@ -108,6 +115,9 @@
 - Per-Lap playback with tyre display to see typre temperatures over each lap
 - Correlation chart between Lap Time and Tyre Temperature
 
+<img width="1000" height="630" alt="screenshot4" src="https://github.com/user-attachments/assets/c32e645d-23f5-44fd-a619-6cb540a8811b" />
+
+
 **How to use:**
 1. Select a lap to view tyre temps
 2. Press play to begin playback, option to speed up playback if desired
@@ -125,6 +135,8 @@
 - Fuel load vs. lap time correlation (scatter plot)
 - Average fuel usage statistics
 - Full fuel level line chart over session, extremeley useful if practicing for an upcoming endurance event to calculate optimal refuelling strategies
+
+<img width="1000" height="600" alt="screenshot5" src="https://github.com/user-attachments/assets/6681c6da-f769-40bb-9180-c24798f42b8b" />
 
 **How to use:**
 1. Click on bars to select specific laps
