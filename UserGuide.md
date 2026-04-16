@@ -74,7 +74,7 @@
 - Real-time playback of your pedal inputs
 - Coasting detection
 
-<img width="1000" height="580" alt="screenshot2" src="https://github.com/user-attachments/assets/9de00a2c-ae2c-478f-8a23-a624234e3cde" />
+<img width="1000" height="580" alt="screnshot8" src="https://github.com/user-attachments/assets/3a58bf21-c6ad-452d-82b7-27b4a104922d" />
 
 
 **How to use:**
