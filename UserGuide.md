@@ -103,7 +103,7 @@
 4. Or vice-versa, double click a lockup on the track map to highlight it in the table
 5. Review brake pressure % to understand how hard you were braking
 
-**Pro Tip:** Repeated lockups in the same corner? Try braking earlier or adjusting brake bias!
+**Tip:** Repeated lockups in the same corner? Try braking earlier or adjusting brake bias!
 
 ---
 
@@ -143,7 +143,7 @@
 2. Review the correlation plot
 3. Use average consumption to plan pit strategies
 
-**Pro Tip:** IN and OUT laps are excluded from correlation analysis for accuracy!
+**Tip:** IN and OUT laps are excluded from correlation analysis for accuracy!
 
 ---
 
