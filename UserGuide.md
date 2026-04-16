@@ -45,8 +45,11 @@
 
 ### 🏁 Session Overview
 **What it shows:**
-- Overall session statistics specific to session type
+- Overall session statistics specific to session type (Race | Qualifying | Practice)
 - Weather conditions and track information
+
+<img width="866" height="798" alt="screenshot6" src="https://github.com/user-attachments/assets/10350119-4cf1-4957-9454-fb7df78dee65" />
+
 
 ---
 
