@@ -1,4 +1,4 @@
-# iRacing Telemetry Analyzer
+# iRacing Telemetry Analyser
 ## **[▶️ Video: Showcase & Demo](https://www.youtube.com/watch?v=4drDeOGHRqY)**
 
 **[📥 Download Latest Release](https://github.com/ChristopherKenny2k/iRacingSessionAnalyser/releases/latest/download/iRacing-Telemetry-Analyzer.exe)**
