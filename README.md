@@ -14,7 +14,9 @@ Comprehensive telemetry analysis tool for iRacing sessions. Load your CSV teleme
 - **Fuel Management** - Usage tracking, correlation analysis, and consumption patterns
 - **Tire Analysis** - Temperature monitoring with lap-by-lap playback and per-tyre heat map visualization
 - **Brake Analysis** - Automatic lockup detection with track map plotting
+- **G-Force Analysis** - View G-G Diagram aswell as a steering input / lateral Accelleration line graph
 - **Data Preview** - Built-in CSV viewer for raw telemetry inspection
+
 
 ## 🚀 Quick Start
 
