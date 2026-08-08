@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../Downloads/iracing_analyser/iracing_analyser/analysis"
+		},
+		{
+			"path": "../../Downloads/iracing_analyser/iracing_analyser/pages"
+		},
+		{
+			"path": "../../Downloads/iracing_analyser/iracing_analyser/utils"
+		},
+		{
+			"path": "../../Downloads/iracing_analyser/iracing_analyser/widgets"
+		}
+	],
+	"settings": {}
+}

@@ -1,4 +1,5 @@
-# iRacing Telemetry Analyzer
+# iRacing Telemetry Analyser
+## **[▶️ Video: Showcase & Demo](https://www.youtube.com/watch?v=4drDeOGHRqY)**
 
 **[📥 Download Latest Release](https://github.com/ChristopherKenny2k/iRacingSessionAnalyser/releases/latest/download/iRacing-Telemetry-Analyzer.exe)**
 
@@ -20,7 +21,7 @@ Comprehensive telemetry analysis tool for iRacing sessions. Load your CSV teleme
 ### For Users (No coding required!)
 1. [Download the latest .exe](https://github.com/ChristopherKenny2k/iRacingSessionAnalyser/releases/latest/download/iRacing-Telemetry-Analyzer.exe)
 2. Run `iRacing-Telemetry-Analyzer.exe`
-3. Load your iRacing CSV telemetry file
+3. Load your iRacing CSV telemetry file (tutorial for csv conversion here → https://youtu.be/9JIT0l2SJ9c)
 4. Analyze your performance!
 
 ### For Developers
