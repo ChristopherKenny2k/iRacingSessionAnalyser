@@ -147,6 +147,21 @@
 
 ---
 
+### 🛞 G-Force / Steering Input Data
+**What it shows:**
+- A G-G plot of lateral and longitudinal g-forces experienced over a lap
+- A combined line chart featuring lateral accelleration and steering input over a selected lap
+- A lap selector
+
+ <img width="1000" height="600" alt="screenshot9" src="https://github.com/user-attachments/assets/49f741fd-b10b-4927-9065-016ab8bca8a8" />
+
+**How to use:**
+1. Select a lap to begin analysis g-force / steering input data
+2. Look closely for sharp spikes in lateral acceleration and steering input in line chart to identify snaps of oversteer
+3. Inverseley, look for steering input & lateral acceleration disparities to indentify moments of understeer
+   
+---
+
 ### 📋 Data Previewer
 **What it shows:**
 - Raw CSV telemetry data viewer
