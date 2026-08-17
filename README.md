@@ -55,7 +55,24 @@ python app.py
 
 ## 📊 Screenshots
 
-*Coming soon!*
+**Session Overview Screen**
+<img width="866" height="798" alt="screenshot6" src="https://github.com/user-attachments/assets/89051d03-0deb-4b0c-afea-619da4711173" />
+
+**Lap Timing Data Screen**
+<img width="1698" height="974" alt="screenshot1" src="https://github.com/user-attachments/assets/625396da-0a24-4235-b9ba-12531cfdcf56" />
+
+**Pedal Usage Data Screen**
+<img width="1687" height="760" alt="screenshot2" src="https://github.com/user-attachments/assets/2b017797-c868-4c03-8693-ad3f708db602" />
+
+**Fuel Usage Data Screen**
+<img width="1687" height="967" alt="screenshot5" src="https://github.com/user-attachments/assets/ef87298f-a4b2-4c95-b219-2aad1467164a" />
+
+**Lock-Up / Braking Analysis Screen**
+<img width="1703" height="740" alt="screenshot3" src="https://github.com/user-attachments/assets/ae5f26d3-96e4-472e-b164-1a9d8bac4366" />
+
+**G-Force / Steering Input Analysis Screen**
+<img width="1702" height="833" alt="screenshot9" src="https://github.com/user-attachments/assets/d4a30910-3f7a-4eae-b557-3724ba26ac31" />
+
 
 
 ## 📝 License
